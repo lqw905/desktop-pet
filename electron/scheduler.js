@@ -257,12 +257,35 @@ async function showProactiveMessage(text) {
   const mood = triggerEvent('user_interaction');
   petWindow.webContents.send('update-mood', mood);
 
-  cooldownUntil = Date.now() + 2 * 60 * 1000;
+  cooldownUntil = Date.now() + 1 * 60 * 1000;
+}
+
+const QUICK_GREETINGS = [
+  '嘿！你来啦~',
+  '嗯？叫我吗？',
+  '在呢在呢！',
+  '哈喽~',
+  '诶？怎么啦？',
+  '我一直都在哦~',
+  '来啦来啦！',
+  '有什么好玩的吗？',
+  '今天过得怎么样？',
+  '我在想你呢~',
+  '嘿嘿，被你发现了',
+  '叮咚！你的小伴已上线~',
+];
+
+function getRandomGreeting() {
+  return QUICK_GREETINGS[Math.floor(Math.random() * QUICK_GREETINGS.length)];
 }
 
 async function triggerProactiveMessage() {
   markUserActive();
   triggerEvent('user_interaction');
+
+  // 立即显示本地问候语，不用等 API 响应
+  const quickGreeting = getRandomGreeting();
+  showBubbleOnly(quickGreeting);
 
   const context = buildContext({
     todayMessageCount: getTodayMessageCount(),
@@ -284,11 +307,22 @@ async function triggerProactiveMessage() {
   } catch (err) {
     lastErrorMsg = formatError(err);
     console.error('Force speak failed:', lastErrorMsg);
-    decision = { should_speak: true, message: `唔...${lastErrorMsg}` };
+    // API 失败了也不怕，本地问候语已经显示了
+    return;
   }
 
+  // 用 AI 生成的内容替换本地问候语
   if (decision.message) {
     await showProactiveMessage(decision.message);
+  }
+}
+
+// 只显示气泡，不保存消息、不触发广播（用于即时反馈）
+function showBubbleOnly(text) {
+  const petWindow = getPetWindow();
+  if (!petWindow || petWindow.isDestroyed()) return;
+  if (isBubbleEnabled) {
+    petWindow.webContents.send('show-bubble', text);
   }
 }
 

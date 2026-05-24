@@ -123,12 +123,12 @@ function triggerEvent(event) {
  */
 function getProactiveInterval() {
   switch (currentMood) {
-    case 'excited': return { min: 1.5, max: 3 };
-    case 'bored':   return { min: 1.5, max: 3 };
-    case 'caring':  return { min: 2, max: 4 };
-    case 'happy':   return { min: 2.5, max: 5 };
-    case 'sleepy':  return { min: 10, max: 20 };
-    default:        return { min: 2.5, max: 5 };
+    case 'excited': return { min: 1, max: 2 };
+    case 'bored':   return { min: 1, max: 2 };
+    case 'caring':  return { min: 1.5, max: 3 };
+    case 'happy':   return { min: 1.5, max: 3.5 };
+    case 'sleepy':  return { min: 5, max: 12 };
+    default:        return { min: 1.5, max: 3.5 };
   }
 }
 

@@ -270,6 +270,27 @@ app.whenReady().then(async () => {
     }
   });
 
+  ipcMain.on('pet-dragged', () => {
+    const messages = [
+      '哎呀，别拽我啦~',
+      '呜呜，要被拖走了...',
+      '嘿！轻一点嘛！',
+      '你要把我带到哪儿去呀？',
+      '晕了晕了，慢点慢点！',
+      '诶诶诶？我在飞！',
+      '别别别，我恐高！',
+      '哇啊，好刺激！',
+      '哼，随便你拖吧...',
+      '你这是在遛宠物吗？',
+      '哎哟，我的小短腿跟不上啦~',
+      '好吧好吧，换个地方也不错~',
+    ];
+    const msg = messages[Math.floor(Math.random() * messages.length)];
+    if (petWindow && !petWindow.isDestroyed()) {
+      petWindow.webContents.send('show-bubble', msg);
+    }
+  });
+
   ipcMain.handle('check-status', async () => {
     const status = await deepseek.checkStatus();
     const lastError = scheduler.getLastError ? scheduler.getLastError() : null;

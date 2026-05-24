@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld('petAPI', {
   openChat: () => ipcRenderer.send('open-chat-window'),
   closeChat: () => ipcRenderer.send('close-chat-window'),
   forceSpeak: () => ipcRenderer.send('force-speak'),
+  petDragged: () => ipcRenderer.send('pet-dragged'),
 
   // Remove listeners
   removeAllListeners: (channel) => ipcRenderer.removeAllListeners(channel)

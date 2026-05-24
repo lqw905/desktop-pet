@@ -48,20 +48,21 @@ document.addEventListener('mouseup', () => {
     if (dragMoved) {
       petBody.classList.add('bouncing');
       setTimeout(() => petBody.classList.remove('bouncing'), 600);
+      window.petAPI?.petDragged();
     }
   }
 });
 
-// Click to open chat panel (only if not dragging)
+// Click to trigger an automatic greeting (only if not dragging)
 petBody.addEventListener('click', (e) => {
   if (dragMoved) return;
-  window.petAPI?.openChat();
+  window.petAPI?.forceSpeak();
 });
 
-// Double click to force the pet to speak
+// Double click to open chat dialog
 petBody.addEventListener('dblclick', () => {
   if (dragMoved) return;
-  window.petAPI?.forceSpeak();
+  window.petAPI?.openChat();
 });
 
 // --- Bubble management ---
