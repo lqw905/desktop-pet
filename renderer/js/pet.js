@@ -2,10 +2,12 @@
 const petBody = document.getElementById('pet-body');
 const bubble = document.getElementById('bubble');
 const bubbleText = document.getElementById('bubble-text');
+const bubbleClose = document.getElementById('bubble-close');
 
 let bubbleTimer = null;
 let isDragging = false;
 let dragMoved = false;
+let bubbleEnabled = true;
 
 // --- Drag to move window ---
 let dragOffsetX = 0;
@@ -64,6 +66,7 @@ petBody.addEventListener('dblclick', () => {
 
 // --- Bubble management ---
 function showBubble(text, duration = 8000) {
+  if (!bubbleEnabled) return;
   if (bubbleTimer) clearTimeout(bubbleTimer);
 
   bubbleText.textContent = text;
@@ -87,10 +90,17 @@ function showBubble(text, duration = 8000) {
 }
 
 function hideBubble() {
-  bubble.classList.remove('bubble-visible');
+  bubble.classList.remove('bubble-visible', 'pop-in');
   bubble.classList.add('bubble-hidden');
   if (bubbleTimer) clearTimeout(bubbleTimer);
 }
+
+// Close button dismisses bubble without opening chat
+bubbleClose.addEventListener('mousedown', (e) => {
+  e.stopPropagation();
+  e.preventDefault();
+  hideBubble();
+});
 
 // --- Mood update ---
 function setMood(mood) {
@@ -108,10 +118,16 @@ if (window.petAPI) {
   window.petAPI.onUpdateMood((mood) => {
     setMood(mood);
   });
+
+  window.petAPI.onToggleBubble((enabled) => {
+    bubbleEnabled = enabled;
+    if (!enabled) hideBubble();
+  });
 }
 
 // --- Click bubble to open chat ---
 bubble.addEventListener('click', (e) => {
+  if (e.target === bubbleClose) return; // don't open chat when clicking close button
   e.stopPropagation();
   if (bubble.classList.contains('bubble-visible')) {
     window.petAPI?.openChat();

@@ -4,6 +4,7 @@ contextBridge.exposeInMainWorld('petAPI', {
   // Pet window actions
   onShowBubble: (callback) => ipcRenderer.on('show-bubble', (_event, text) => callback(text)),
   onUpdateMood: (callback) => ipcRenderer.on('update-mood', (_event, mood) => callback(mood)),
+  onToggleBubble: (callback) => ipcRenderer.on('toggle-bubble', (_event, enabled) => callback(enabled)),
 
   // Chat actions
   sendMessage: (text) => ipcRenderer.send('user-message', text),

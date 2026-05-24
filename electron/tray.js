@@ -3,6 +3,7 @@ const path = require('path');
 
 let tray = null;
 let isMuted = false;
+let isBubbleEnabled = true;
 
 function createTray(mainWindow, callbacks = {}) {
   // Create a simple 16x16 tray icon programmatically (no external file needed)
@@ -40,6 +41,14 @@ function updateTrayMenu(mainWindow, callbacks = {}) {
       click: () => {
         isMuted = !isMuted;
         if (callbacks.onMuteChange) callbacks.onMuteChange(isMuted);
+        updateTrayMenu(mainWindow, callbacks);
+      }
+    },
+    {
+      label: isBubbleEnabled ? '💬 气泡：开' : '💬 气泡：关',
+      click: () => {
+        isBubbleEnabled = !isBubbleEnabled;
+        if (callbacks.onBubbleToggle) callbacks.onBubbleToggle(isBubbleEnabled);
         updateTrayMenu(mainWindow, callbacks);
       }
     },
@@ -117,4 +126,8 @@ function getIsMuted() {
   return isMuted;
 }
 
-module.exports = { createTray, getIsMuted };
+function getIsBubbleEnabled() {
+  return isBubbleEnabled;
+}
+
+module.exports = { createTray, getIsMuted, getIsBubbleEnabled };

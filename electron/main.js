@@ -15,7 +15,7 @@ for (const envPath of envPaths) {
 
 const { app, ipcMain, BrowserWindow, screen } = require('electron');
 const { createPetWindow, getPetWindow, togglePetWindow } = require('./window');
-const { createTray, getIsMuted } = require('./tray');
+const { createTray, getIsMuted, getIsBubbleEnabled } = require('./tray');
 
 let petWindow = null;
 let chatWindow = null;
@@ -155,6 +155,12 @@ app.whenReady().then(async () => {
   tray = createTray(petWindow, {
     onMuteChange: (muted) => {
       if (scheduler) scheduler.setMuted(muted);
+    },
+    onBubbleToggle: (enabled) => {
+      if (scheduler) scheduler.setBubbleEnabled(enabled);
+      if (petWindow && !petWindow.isDestroyed()) {
+        petWindow.webContents.send('toggle-bubble', enabled);
+      }
     },
     onForceSpeak: async () => {
       try {

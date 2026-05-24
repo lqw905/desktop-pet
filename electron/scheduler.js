@@ -11,6 +11,7 @@ const { getPetWindow } = require('./window');
 let schedulerTimer = null;
 let cooldownUntil = null;
 let isMuted = false;
+let isBubbleEnabled = true;
 let lastErrorMsg = null;
 let chatMessageCallback = null;
 
@@ -150,6 +151,10 @@ function setMuted(muted) {
   isMuted = muted;
 }
 
+function setBubbleEnabled(enabled) {
+  isBubbleEnabled = enabled;
+}
+
 function getNextInterval() {
   const range = getProactiveInterval();
   const minutes = range.min + Math.random() * (range.max - range.min);
@@ -242,9 +247,12 @@ async function showProactiveMessage(text) {
   const petWindow = getPetWindow();
   if (!petWindow || petWindow.isDestroyed()) return;
 
-  petWindow.webContents.send('show-bubble', text);
   saveMessage('pet', text);
   broadcastMessage('pet', text);
+
+  if (isBubbleEnabled) {
+    petWindow.webContents.send('show-bubble', text);
+  }
 
   const mood = triggerEvent('user_interaction');
   petWindow.webContents.send('update-mood', mood);
@@ -318,7 +326,7 @@ function stopScheduler() {
 }
 
 module.exports = {
-  startScheduler, stopScheduler, setMuted,
+  startScheduler, stopScheduler, setMuted, setBubbleEnabled,
   triggerProactiveMessage, generateReply, generateReplyStreaming,
   scheduleNextCheck, getLastError, onChatMessage
 };
