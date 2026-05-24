@@ -8,7 +8,6 @@ let bubbleTimer = null;
 let isDragging = false;
 let dragMoved = false;
 let bubbleEnabled = true;
-
 // --- Drag to move window ---
 let dragOffsetX = 0;
 let dragOffsetY = 0;
@@ -83,7 +82,6 @@ function showBubble(text, duration = 8000) {
   // Pet bounces when speaking
   petBody.classList.add('bouncing');
   setTimeout(() => petBody.classList.remove('bouncing'), 600);
-
   // Auto-hide after duration
   bubbleTimer = setTimeout(() => {
     hideBubble();

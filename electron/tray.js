@@ -70,7 +70,11 @@ function updateTrayMenu(mainWindow, callbacks = {}) {
       label: '退出',
       click: () => {
         const { app } = require('electron');
-        app.quit();
+        if (tray) {
+          tray.destroy();
+          tray = null;
+        }
+        app.exit(0);
       }
     }
   ]);

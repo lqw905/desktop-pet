@@ -290,7 +290,6 @@ app.whenReady().then(async () => {
       petWindow.webContents.send('show-bubble', msg);
     }
   });
-
   ipcMain.handle('check-status', async () => {
     const status = await deepseek.checkStatus();
     const lastError = scheduler.getLastError ? scheduler.getLastError() : null;
