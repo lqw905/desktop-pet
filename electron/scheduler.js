@@ -54,8 +54,8 @@ function formatError(err) {
 
 async function generateReply(userMessage) {
   markUserActive();
-  const sentiment = detectPraiseScold(userMessage);
-  if (sentiment) triggerEvent(sentiment);
+  const fastSentiment = detectSentimentFast(userMessage);
+  if (fastSentiment) triggerEvent(fastSentiment);
   triggerEvent('user_interaction');
   saveMessage('user', userMessage);
   broadcastMessage('user', userMessage);
@@ -94,13 +94,18 @@ async function generateReply(userMessage) {
     petWindow.webContents.send('update-mood', getCurrentMood());
   }
 
+  // 异步 LLM 情绪分析（不阻塞回复）
+  analyzeSentimentLLM(userMessage, conversations).then(llmSentiment => {
+    if (llmSentiment) triggerEvent(llmSentiment);
+  });
+
   return reply;
 }
 
 async function generateReplyStreaming(userMessage, chatWindow) {
   markUserActive();
-  const sentiment = detectPraiseScold(userMessage);
-  if (sentiment) triggerEvent(sentiment);
+  const fastSentiment = detectSentimentFast(userMessage);
+  if (fastSentiment) triggerEvent(fastSentiment);
   triggerEvent('user_interaction');
   saveMessage('user', userMessage);
 
@@ -143,6 +148,11 @@ async function generateReplyStreaming(userMessage, chatWindow) {
   if (petWindow && !petWindow.isDestroyed()) {
     petWindow.webContents.send('update-mood', getCurrentMood());
   }
+
+  // 异步 LLM 情绪分析（不阻塞回复）
+  analyzeSentimentLLM(userMessage, conversations).then(llmSentiment => {
+    if (llmSentiment) triggerEvent(llmSentiment);
+  });
 
   return reply;
 }
@@ -332,13 +342,54 @@ function formatRecentConvForSentry() {
   return conversations.map(c => `[${c.role === 'user' ? '用户' : '宠物'}]: ${c.content.substring(0, 60)}`).join('\n');
 }
 
-function detectPraiseScold(text) {
-  const praiseKeywords = ['好棒', '厉害', '可爱', '乖', '谢谢', '不错', '真棒', '厉害了', '靠谱', '牛', '赞'];
-  const scoldKeywords = ['烦', '滚', '闭嘴', '别吵', '讨厌', '无聊', '笨', '傻', '吵死了', '别说了'];
+// 本地快速关键词检测（即时、无网络延迟）
+const SENTIMENT_KEYWORDS = {
+  user_praises:       ['好棒', '厉害', '可爱', '乖', '谢谢', '不错', '真棒', '牛', '赞', '靠谱', '厉害了', '你好聪明', '牛逼', '好厉害'],
+  user_scolds:        ['烦', '滚', '闭嘴', '别吵', '讨厌', '笨', '傻', '吵死了', '别说了', '走开', '别烦我'],
+  user_happy:         ['哈哈', '嘿嘿', '嘻嘻', '笑死', '开心', '好玩', '有趣', '有意思', '哈哈哈', 'hhhh', 'www'],
+  user_sad:           ['难过', '伤心', '哭', '难受', '郁闷', '不开心', '心累', '崩溃', '好累', '唉', 'emo'],
+  user_angry:         ['气死', '生气', '愤怒', '火大', '离谱', '无语', '恶心', '垃圾'],
+  user_affectionate:  ['抱抱', '摸摸', '贴贴', '亲亲', '想你', '喜欢', '爱你', '宝贝', '小伴', '乖乖'],
+};
 
-  if (praiseKeywords.some(k => text.includes(k))) return 'user_praises';
-  if (scoldKeywords.some(k => text.includes(k))) return 'user_scolds';
+function detectSentimentFast(text) {
+  for (const [event, keywords] of Object.entries(SENTIMENT_KEYWORDS)) {
+    if (keywords.some(k => text.includes(k))) return event;
+  }
   return null;
+}
+
+// LLM 深度情绪分析（异步、不阻塞回复）
+async function analyzeSentimentLLM(userMessage, conversations) {
+  const recent = conversations.slice(-4).map(c =>
+    `[${c.role === 'user' ? '用户' : '宠物'}]: ${c.content.substring(0, 100)}`
+  ).join('\n');
+
+  const prompt = `分析用户最后一条消息的情绪。只输出一个词。
+
+对话记录：
+${recent}
+
+情绪选项：happy(开心), angry(生气), sad(难过), affectionate(撒娇亲近), neutral(中性)
+
+只输出一个词：`;
+
+  try {
+    const result = await callDeepseek(prompt, { temperature: 0, maxTokens: 5 });
+    const sentiment = (result || '').trim().toLowerCase();
+
+    const mapping = {
+      'happy': 'user_happy',
+      'angry': 'user_angry',
+      'sad': 'user_sad',
+      'affectionate': 'user_affectionate',
+      'neutral': null,
+    };
+
+    return mapping[sentiment] || null;
+  } catch {
+    return null;
+  }
 }
 
 function getMinutesSinceLastSpeak() {

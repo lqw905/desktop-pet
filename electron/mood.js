@@ -93,6 +93,31 @@ function triggerEvent(event) {
       else currentMood = 'bored';
       break;
 
+    case 'user_happy':
+      // 用户聊得开心
+      if (currentMood === 'bored') currentMood = 'happy';
+      else if (currentMood === 'sleepy') currentMood = r < 0.5 ? 'happy' : 'caring';
+      else if (currentMood === 'happy' && r < 0.3) currentMood = 'excited';
+      else if (currentMood === 'caring' && r < 0.3) currentMood = 'excited';
+      break;
+
+    case 'user_angry':
+      // 用户生气了
+      if (currentMood === 'excited') currentMood = 'happy';
+      else if (currentMood === 'happy') currentMood = 'bored';
+      else if (currentMood === 'caring') currentMood = 'bored';
+      break;
+
+    case 'user_sad':
+      // 用户难过 → 宠物变关心
+      if (currentMood !== 'sleepy') currentMood = r < 0.7 ? 'caring' : 'happy';
+      break;
+
+    case 'user_affectionate':
+      // 用户撒娇/亲近
+      currentMood = r < 0.5 ? 'excited' : 'caring';
+      break;
+
     case 'tick':
       // Periodic random drift — small chance each proactive check
       if (currentMood === 'happy' && r < 0.15) currentMood = r < 0.5 ? 'excited' : 'caring';
