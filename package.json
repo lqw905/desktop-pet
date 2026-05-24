@@ -1,0 +1,47 @@
+{
+  "name": "desktop-pet",
+  "version": "1.0.0",
+  "description": "A proactive desktop pet powered by local AI",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "electron .",
+    "build": "electron-builder && npm run postbuild",
+    "build:win": "electron-builder --win && npm run postbuild",
+    "postbuild": "node -e \"require('fs').copyFileSync('.env.example','dist/win-unpacked/resources/.env.example')\""
+  },
+  "build": {
+    "appId": "com.desktoppet.app",
+    "productName": "Desktop Pet",
+    "directories": {
+      "output": "dist"
+    },
+    "extraResources": [
+      {
+        "from": ".env.example",
+        "to": ".env.example"
+      }
+    ],
+    "files": [
+      "electron/**/*",
+      "renderer/**/*",
+      "node_modules/**/*",
+      "package.json",
+      ".env.example"
+    ],
+    "win": {
+      "target": "zip",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2"
+  }
+}
