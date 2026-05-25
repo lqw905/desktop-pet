@@ -194,4 +194,4 @@ async function checkStatus() {
   }
 }
 
-module.exports = { callDeepseek, callDeepseekStream, checkStatus, MODEL, API_BASE, PROVIDER_NAME };
+module.exports = { callDeepseek, callDeepseekStream, checkStatus, MODEL, API_BASE, PROVIDER_NAME, buildHeaders };

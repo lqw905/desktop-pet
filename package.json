@@ -7,7 +7,10 @@
     "dev": "electron .",
     "build": "electron-builder && npm run postbuild",
     "build:win": "electron-builder --win && npm run postbuild",
-    "postbuild": "node -e \"require('fs').copyFileSync('.env.example','dist/win-unpacked/resources/.env.example')\""
+    "postbuild": "node -e \"require('fs').copyFileSync('.env.example','dist/win-unpacked/resources/.env.example')\"",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
   },
   "build": {
     "appId": "com.desktoppet.app",
@@ -39,7 +42,13 @@
   },
   "devDependencies": {
     "electron": "^33.0.0",
-    "electron-builder": "^25.0.0"
+    "electron-builder": "^25.0.0",
+    "jest": "^30.4.2"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testMatch": ["**/test/**/*.test.js"],
+    "collectCoverageFrom": ["electron/**/*.js", "!electron/main.js", "!electron/preload.js"]
   },
   "dependencies": {
     "dotenv": "^17.4.2"

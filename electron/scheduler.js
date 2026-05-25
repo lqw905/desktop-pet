@@ -556,5 +556,8 @@ function stopScheduler() {
 module.exports = {
   startScheduler, stopScheduler, setMuted, setBubbleEnabled,
   triggerProactiveMessage, generateReply, generateReplyStreaming,
-  scheduleNextCheck, getLastError, onChatMessage
+  scheduleNextCheck, getLastError, onChatMessage,
+  // 导出用于测试
+  extractJson, formatError, detectSentimentFast, hasMemorySignal,
+  getRandomGreeting, QUICK_GREETINGS, SENTIMENT_KEYWORDS
 };
