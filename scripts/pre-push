@@ -1,0 +1,27 @@
+#!/bin/sh
+# pre-push hook：push 前自动运行 npm test，测试失败则阻止 push
+
+echo ""
+echo "========================================="
+echo "  pre-push hook: 运行 npm test..."
+echo "========================================="
+echo ""
+
+npm test
+
+if [ $? -ne 0 ]; then
+  echo ""
+  echo "========================================="
+  echo "  npm test 失败，push 已被阻止"
+  echo "  请修复失败的测试后再 push"
+  echo "========================================="
+  echo ""
+  exit 1
+fi
+
+echo ""
+echo "========================================="
+echo "  npm test 通过，允许 push"
+echo "========================================="
+echo ""
+exit 0
