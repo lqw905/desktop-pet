@@ -4,7 +4,8 @@ const { buildContext, markUserActive, getTimeContext, getActiveWindowTitle, getI
 const { getCurrentMood, triggerEvent, getProactiveInterval } = require('./mood');
 const {
   saveMessage, getRecentConversations, getTodayMessageCount,
-  getLastPetMessageTime
+  getLastPetMessageTime, getMemorySettings, getMemorySummary,
+  setMemorySummary, getProfile, setProfile, shouldUpdateSummary
 } = require('./memory');
 const { getPetWindow } = require('./window');
 
@@ -14,6 +15,8 @@ let isMuted = false;
 let isBubbleEnabled = true;
 let lastErrorMsg = null;
 let chatMessageCallback = null;
+let isUpdatingMemory = false;
+let lastMemoryUpdateErrorAt = 0;
 
 function onChatMessage(cb) {
   chatMessageCallback = cb;
@@ -60,8 +63,14 @@ async function generateReply(userMessage) {
   saveMessage('user', userMessage);
   broadcastMessage('user', userMessage);
 
-  const conversations = getRecentConversations(10);
-  const context = { time: new Date().toLocaleString('zh-CN'), activeWindow: getActiveWindowTitle() };
+  const settings = getMemorySettings();
+  const conversations = getRecentConversations(settings.chatContextMessages);
+  const context = {
+    time: new Date().toLocaleString('zh-CN'),
+    activeWindow: getActiveWindowTitle(),
+    memorySummary: getMemorySummary(),
+    profile: getProfile()
+  };
   const prompt = buildChatPrompt(conversations, getCurrentMood(), context);
 
   let reply = null;
@@ -88,6 +97,7 @@ async function generateReply(userMessage) {
   lastErrorMsg = null;
   saveMessage('pet', reply);
   broadcastMessage('pet', reply);
+  maybeUpdateLongTermMemory().catch(() => {});
 
   const petWindow = getPetWindow();
   if (petWindow && !petWindow.isDestroyed()) {
@@ -109,8 +119,14 @@ async function generateReplyStreaming(userMessage, chatWindow) {
   triggerEvent('user_interaction');
   saveMessage('user', userMessage);
 
-  const conversations = getRecentConversations(10);
-  const context = { time: new Date().toLocaleString('zh-CN'), activeWindow: getActiveWindowTitle() };
+  const settings = getMemorySettings();
+  const conversations = getRecentConversations(settings.chatContextMessages);
+  const context = {
+    time: new Date().toLocaleString('zh-CN'),
+    activeWindow: getActiveWindowTitle(),
+    memorySummary: getMemorySummary(),
+    profile: getProfile()
+  };
   const prompt = buildChatPrompt(conversations, getCurrentMood(), context);
 
   let reply = null;
@@ -143,6 +159,7 @@ async function generateReplyStreaming(userMessage, chatWindow) {
   lastErrorMsg = null;
   saveMessage('pet', reply);
   broadcastMessage('pet', reply);
+  maybeUpdateLongTermMemory().catch(() => {});
 
   const petWindow = getPetWindow();
   if (petWindow && !petWindow.isDestroyed()) {
@@ -228,7 +245,8 @@ async function proactiveCheck() {
     const context = buildContext({
       todayMessageCount: getTodayMessageCount(),
       recentConversations: formatRecentConvForSentry(),
-      minutesSinceLastSpeak: getMinutesSinceLastSpeak()
+      minutesSinceLastSpeak: getMinutesSinceLastSpeak(),
+      memorySummary: getMemorySummary()
     }, getCurrentMood());
 
     const sentryPrompt = buildSentryPrompt(context);
@@ -300,7 +318,8 @@ async function triggerProactiveMessage() {
   const context = buildContext({
     todayMessageCount: getTodayMessageCount(),
     recentConversations: formatRecentConvForSentry(),
-    minutesSinceLastSpeak: getMinutesSinceLastSpeak()
+    minutesSinceLastSpeak: getMinutesSinceLastSpeak(),
+    memorySummary: getMemorySummary()
   }, getCurrentMood());
 
   const sentryPrompt = buildSentryPrompt(context);
@@ -337,9 +356,67 @@ function showBubbleOnly(text) {
 }
 
 function formatRecentConvForSentry() {
-  const conversations = getRecentConversations(5);
+  const settings = getMemorySettings();
+  const conversations = getRecentConversations(settings.sentryContextMessages);
   if (conversations.length === 0) return '（尚无对话）';
   return conversations.map(c => `[${c.role === 'user' ? '用户' : '宠物'}]: ${c.content.substring(0, 60)}`).join('\n');
+}
+
+async function maybeUpdateLongTermMemory() {
+  const settings = getMemorySettings();
+  if (!settings.memoryEnabled || !shouldUpdateSummary() || isUpdatingMemory) return;
+  if (Date.now() - lastMemoryUpdateErrorAt < 10 * 60 * 1000) return;
+
+  isUpdatingMemory = true;
+  try {
+    const recent = getRecentConversations(Math.max(settings.summaryUpdateEvery, 12));
+    const existingSummary = getMemorySummary();
+    const existingProfile = getProfile();
+    const recentText = recent.map(m =>
+      `[${m.role === 'user' ? '用户' : '宠物'}]: ${m.content.substring(0, 220)}`
+    ).join('\n');
+
+    const prompt = `你在维护桌面宠物的长期记忆。请基于旧记忆和最近对话，输出精简 JSON。
+
+要求：
+- summary 保留长期有用的信息，不记录一次性闲聊
+- preferences 记录用户明确表达的偏好
+- facts 记录稳定事实
+- currentProjects 记录正在进行的项目
+- summary 不超过 ${settings.summaryMaxChars} 个中文字符
+- 只输出 JSON，不要解释
+
+旧长期摘要：
+${existingSummary || '（无）'}
+
+旧用户画像：
+${JSON.stringify(existingProfile)}
+
+最近对话：
+${recentText}
+
+JSON 格式：
+{"summary":"...","profile":{"userName":"","preferences":[],"facts":[],"currentProjects":[]}}`;
+
+    const raw = await callDeepseek(prompt, {
+      temperature: 0.2,
+      maxTokens: 700,
+      format: 'json'
+    });
+    const parsed = extractJson(raw);
+    if (parsed?.summary) {
+      setMemorySummary(parsed.summary);
+    }
+    if (parsed?.profile && typeof parsed.profile === 'object') {
+      setProfile(parsed.profile);
+    }
+    lastMemoryUpdateErrorAt = 0;
+  } catch (err) {
+    lastMemoryUpdateErrorAt = Date.now();
+    console.error('Long-term memory update failed:', err.message || String(err));
+  } finally {
+    isUpdatingMemory = false;
+  }
 }
 
 // 本地快速关键词检测（即时、无网络延迟）

@@ -32,6 +32,7 @@ contextBridge.exposeInMainWorld('controlAPI', {
   onMoodChanged: (callback) => ipcRenderer.on('mood-changed', (_event, data) => callback(data)),
   onChatMessage: (callback) => ipcRenderer.on('chat-message', (_event, data) => callback(data)),
   getState: () => ipcRenderer.invoke('get-state'),
+  clearMemory: () => ipcRenderer.invoke('clear-memory'),
   setMood: (mood) => ipcRenderer.send('set-mood', mood),
   resetMood: () => ipcRenderer.send('reset-mood'),
   removeAllListeners: (channel) => ipcRenderer.removeAllListeners(channel)

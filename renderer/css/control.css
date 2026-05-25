@@ -18,6 +18,21 @@ body {
   height: 100vh;
   padding: 16px;
   gap: 12px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+#control-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+#control-container::-webkit-scrollbar-thumb {
+  background: #333a56;
+  border-radius: 4px;
+}
+
+#control-container::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 #control-header {
@@ -38,6 +53,7 @@ body {
 
 .panel-grow {
   flex: 1;
+  min-height: 160px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -116,6 +132,37 @@ body {
 .auto-btn:hover {
   border-color: #888;
   color: #ccc;
+}
+
+/* ===== Memory ===== */
+#memory-summary {
+  color: #aaa;
+  font-size: 11px;
+  line-height: 1.5;
+  max-height: 64px;
+  overflow-y: auto;
+  margin-bottom: 8px;
+}
+
+#btn-clear-memory {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid #73434a;
+  border-radius: 6px;
+  background: #25151c;
+  color: #ff9aa8;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+#btn-clear-memory:hover {
+  border-color: #ff9aa8;
+}
+
+#btn-clear-memory:disabled {
+  opacity: 0.55;
+  cursor: default;
 }
 
 /* ===== Chat History ===== */

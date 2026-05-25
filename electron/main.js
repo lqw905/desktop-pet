@@ -258,7 +258,20 @@ app.whenReady().then(async () => {
     return {
       mood: mood.getCurrentMood(),
       moodReason: memory.getLastMoodReason(),
-      recentMessages
+      recentMessages,
+      memorySettings: memory.getMemorySettings(),
+      memorySummary: memory.getMemorySummary(),
+      profile: memory.getProfile()
+    };
+  });
+
+  ipcMain.handle('clear-memory', () => {
+    memory.clearMemory();
+    return {
+      ok: true,
+      memorySettings: memory.getMemorySettings(),
+      memorySummary: memory.getMemorySummary(),
+      profile: memory.getProfile()
     };
   });
 

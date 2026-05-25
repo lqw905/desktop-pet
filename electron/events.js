@@ -1,4 +1,4 @@
-const { execSync } = require('child_process');
+const { execFileSync, execSync } = require('child_process');
 const path = require('path');
 
 const PET_WINDOW_TITLES = ['Chat with Pet', 'Desktop Pet'];
@@ -15,12 +15,38 @@ function getActiveWindowTitle() {
   // Only run the detection if cache expired
   if (!cachedWindowTitle || now - cachedWindowAt >= 20000) {
     try {
-      const scriptPath = path.join(__dirname, 'get-window.ps1');
-      cachedWindowTitle = execSync(`chcp 65001 >nul && powershell -NoProfile -ExecutionPolicy Bypass -File "${scriptPath}"`, {
-        timeout: 3000,
-        encoding: 'utf-8',
-        windowsHide: true
-      }).trim() || null;
+      if (process.platform === 'win32') {
+        const scriptPath = path.join(__dirname, 'get-window.ps1');
+        cachedWindowTitle = execSync(`chcp 65001 >nul && powershell -NoProfile -ExecutionPolicy Bypass -File "${scriptPath}"`, {
+          timeout: 3000,
+          encoding: 'utf-8',
+          windowsHide: true
+        }).trim() || null;
+      } else if (process.platform === 'darwin') {
+        cachedWindowTitle = execFileSync('osascript', [
+          '-e', 'tell application "System Events"',
+          '-e', 'set frontApp to name of first application process whose frontmost is true',
+          '-e', 'tell process frontApp',
+          '-e', 'try',
+          '-e', 'set winTitle to name of front window',
+          '-e', 'on error',
+          '-e', 'set winTitle to ""',
+          '-e', 'end try',
+          '-e', 'end tell',
+          '-e', 'end tell',
+          '-e', 'if winTitle is "" then',
+          '-e', 'return frontApp',
+          '-e', 'else',
+          '-e', 'return frontApp & " - " & winTitle',
+          '-e', 'end if'
+        ], {
+          timeout: 3000,
+          encoding: 'utf-8',
+          stdio: ['ignore', 'pipe', 'ignore']
+        }).trim() || null;
+      } else {
+        cachedWindowTitle = null;
+      }
     } catch {
       cachedWindowTitle = null;
     }

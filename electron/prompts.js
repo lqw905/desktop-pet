@@ -12,6 +12,9 @@ function buildSentryPrompt(context) {
 - 距离上次发言：${context.minutesSinceLastSpeak} 分钟
 - 用户当前窗口：${context.activeWindow || '未知'}
 
+长期记忆：
+${context.memorySummary || '（暂无长期记忆）'}
+
 最近对话记录：
 ${context.recentConversations}
 
@@ -34,6 +37,12 @@ function buildChatPrompt(conversationHistory, mood, context = {}) {
   const historyStr = conversationHistory.map(m =>
     `[${m.role === 'user' ? '用户' : '宠物'}]: ${m.content}`
   ).join('\n');
+  const profile = context.profile || {};
+  const profileLines = [];
+  if (profile.userName) profileLines.push(`- 用户称呼：${profile.userName}`);
+  if (profile.preferences?.length) profileLines.push(`- 用户偏好：${profile.preferences.join('；')}`);
+  if (profile.facts?.length) profileLines.push(`- 已知事实：${profile.facts.join('；')}`);
+  if (profile.currentProjects?.length) profileLines.push(`- 当前项目：${profile.currentProjects.join('；')}`);
 
   const timeStr = context.time || new Date().toLocaleString('zh-CN');
   const moodMap = {
@@ -78,8 +87,14 @@ function buildChatPrompt(conversationHistory, mood, context = {}) {
 你现在的心情：${moodMap[mood] || '正常'}
 用户正在看：${context.activeWindow || '未知'}
 
+长期记忆摘要：
+${context.memorySummary || '（暂无长期记忆）'}
+
+用户画像：
+${profileLines.length ? profileLines.join('\n') : '（暂无用户画像）'}
+
 对话历史：
-${historyStr}
+${historyStr || '（暂无最近对话）'}
 
 现在用中文回复用户（自然一点，像朋友聊天一样）：`;
 }

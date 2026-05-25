@@ -5,6 +5,8 @@ const moodReason = document.getElementById('mood-last-reason');
 const moodButtons = document.querySelectorAll('.mood-btn');
 const autoBtn = document.getElementById('btn-auto');
 const chatHistory = document.getElementById('chat-history');
+const memorySummary = document.getElementById('memory-summary');
+const clearMemoryBtn = document.getElementById('btn-clear-memory');
 
 const MOOD_MAP = {
   happy:   { emoji: '😊', label: '开心' },
@@ -67,6 +69,18 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
+function updateMemoryDisplay(state = {}) {
+  const settings = state.memorySettings || {};
+  const summary = state.memorySummary || '暂无长期记忆';
+  const enabledText = settings.memoryEnabled === false ? '关闭' : '开启';
+  const rawText = settings.saveRawMessages === false ? '不保存原文' : `最多 ${settings.maxConversations || 100} 条`;
+  memorySummary.textContent = `状态：${enabledText}；原文：${rawText}；摘要：${summary}`;
+}
+
+function clearChatHistoryDisplay() {
+  chatHistory.innerHTML = '<div class="empty-hint">暂无最近对话</div>';
+}
+
 // --- IPC Listeners ---
 if (window.controlAPI) {
   window.controlAPI.onMoodChanged(({ mood, reason }) => {
@@ -85,6 +99,7 @@ if (window.controlAPI) {
     if (state.recentMessages) {
       state.recentMessages.forEach(m => addChatEntry(m.role, m.content));
     }
+    updateMemoryDisplay(state);
   });
 }
 
@@ -101,4 +116,16 @@ moodButtons.forEach(btn => {
 autoBtn.addEventListener('click', () => {
   window.controlAPI?.resetMood();
   moodButtons.forEach(b => b.classList.remove('active'));
+});
+
+clearMemoryBtn.addEventListener('click', async () => {
+  if (!window.controlAPI) return;
+  clearMemoryBtn.disabled = true;
+  try {
+    const state = await window.controlAPI.clearMemory();
+    clearChatHistoryDisplay();
+    updateMemoryDisplay(state);
+  } finally {
+    clearMemoryBtn.disabled = false;
+  }
 });
