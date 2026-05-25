@@ -448,3 +448,187 @@ body {
 #bubble.pop-in {
   animation: bubble-pop-in 0.5s ease forwards;
 }
+
+/* ===== Mouse-reactive expressions ===== */
+#pet-body {
+  --look-x: 0px;
+  --look-y: 0px;
+}
+
+.pet-face {
+  top: 24px;
+  width: 58px;
+  height: 36px;
+  transition: transform 0.18s ease;
+}
+
+.brow {
+  position: absolute;
+  top: -5px;
+  width: 17px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(56, 57, 65, 0.82);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.14);
+  transition: transform 0.18s ease, top 0.18s ease, opacity 0.18s ease;
+}
+
+.left-brow {
+  left: 7px;
+  transform: rotate(-3deg);
+}
+
+.right-brow {
+  right: 7px;
+  transform: rotate(3deg);
+}
+
+.eye,
+#pet-body.mood-happy .eye,
+#pet-body.mood-excited .eye,
+#pet-body.mood-caring .eye {
+  top: 3px;
+  width: 16px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fffdf7;
+  box-shadow:
+    inset 0 -1px 0 rgba(0, 0, 0, 0.08),
+    0 1px 1px rgba(116, 75, 0, 0.12);
+  overflow: hidden;
+}
+
+.eye.left-eye {
+  left: 8px;
+}
+
+.eye.right-eye {
+  right: 8px;
+}
+
+.pupil {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 8px;
+  height: 10px;
+  border-radius: 50%;
+  background: #2f3140;
+  transform: translate(calc(-50% + var(--look-x)), calc(-50% + var(--look-y)));
+  transition: transform 0.09s ease, width 0.18s ease, height 0.18s ease;
+}
+
+.eye-shine {
+  position: absolute;
+  top: 4px;
+  left: 9px;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+  transform: translate(calc(var(--look-x) * 0.45), calc(var(--look-y) * 0.45));
+  transition: transform 0.09s ease;
+}
+
+#pet-body.mood-bored .eye,
+#pet-body.mood-sleepy .eye {
+  top: 7px;
+  width: 16px;
+  height: 6px;
+  border-radius: 0 0 12px 12px;
+  background: transparent;
+  border-bottom: 3px solid rgba(69, 72, 85, 0.76);
+  box-shadow: none;
+  overflow: visible;
+}
+
+#pet-body.mood-bored .pupil,
+#pet-body.mood-bored .eye-shine,
+#pet-body.mood-sleepy .pupil,
+#pet-body.mood-sleepy .eye-shine {
+  opacity: 0;
+}
+
+#pet-body.expression-curious .left-brow {
+  transform: rotate(8deg) translateY(1px);
+}
+
+#pet-body.expression-curious .right-brow {
+  transform: rotate(18deg) translateY(-2px);
+}
+
+#pet-body.expression-hover .brow {
+  top: -8px;
+}
+
+#pet-body.expression-hover .left-brow {
+  transform: rotate(-14deg);
+}
+
+#pet-body.expression-hover .right-brow {
+  transform: rotate(14deg);
+}
+
+#pet-body.expression-hover .eye,
+#pet-body.expression-talk .eye {
+  width: 18px;
+  height: 20px;
+  top: 1px;
+}
+
+#pet-body.expression-hover .pupil,
+#pet-body.expression-talk .pupil {
+  width: 9px;
+  height: 11px;
+}
+
+#pet-body.expression-surprised .brow {
+  top: -10px;
+}
+
+#pet-body.expression-surprised .eye {
+  width: 20px;
+  height: 21px;
+  top: 0;
+}
+
+#pet-body.expression-surprised .mouth {
+  width: 8px;
+  height: 8px;
+  border: 2px solid #555;
+  border-radius: 50%;
+  border-bottom-color: #555;
+}
+
+#pet-body.expression-talk .mouth,
+#pet-body.expression-hover .mouth {
+  width: 17px;
+  height: 9px;
+  border-bottom-width: 3px;
+}
+
+#pet-body.expression-squish .pet-face {
+  transform: translateX(-50%) translateY(2px) scaleX(1.08) scaleY(0.92);
+}
+
+#pet-body.expression-squish .eye {
+  height: 14px;
+}
+
+#pet-body.expression-dizzy .left-eye {
+  transform: rotate(14deg);
+}
+
+#pet-body.expression-dizzy .right-eye {
+  transform: rotate(-14deg);
+}
+
+#pet-body.expression-dizzy .pupil {
+  transform: translate(-50%, -50%) scale(0.72);
+}
+
+#pet-body.expression-hover .pet-cheek,
+#pet-body.expression-talk .pet-cheek {
+  opacity: 1;
+  transform: scale(1.1);
+}
