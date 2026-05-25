@@ -139,9 +139,10 @@ body {
   color: #aaa;
   font-size: 11px;
   line-height: 1.5;
-  max-height: 64px;
+  max-height: 96px;
   overflow-y: auto;
   margin-bottom: 8px;
+  white-space: pre-wrap;
 }
 
 #btn-clear-memory {

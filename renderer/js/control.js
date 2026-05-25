@@ -71,10 +71,15 @@ function escapeHtml(text) {
 
 function updateMemoryDisplay(state = {}) {
   const settings = state.memorySettings || {};
+  const stats = state.memoryStats || {};
+  const items = Array.isArray(state.memoryItems) ? state.memoryItems : [];
   const summary = state.memorySummary || '暂无长期记忆';
   const enabledText = settings.memoryEnabled === false ? '关闭' : '开启';
   const rawText = settings.saveRawMessages === false ? '不保存原文' : `最多 ${settings.maxConversations || 100} 条`;
-  memorySummary.textContent = `状态：${enabledText}；原文：${rawText}；摘要：${summary}`;
+  const itemText = items.length
+    ? `\n关键记忆：${items.map(item => item.content).join('；')}`
+    : '';
+  memorySummary.textContent = `状态：${enabledText}；原文：${rawText}；长期记忆 ${stats.memoryItems || 0} 条；候选 ${stats.inboxItems || 0} 条；已审查到 #${stats.lastReviewedMessageId || 0}\n摘要：${summary}${itemText}`;
 }
 
 function clearChatHistoryDisplay() {

@@ -20,18 +20,29 @@ function getDefaultSettings() {
     maxConversations: getEnvInt('MAX_CONVERSATIONS', 100),
     chatContextMessages: getEnvInt('CHAT_CONTEXT_MESSAGES', 4),
     sentryContextMessages: getEnvInt('SENTRY_CONTEXT_MESSAGES', 3),
+    memoryReviewEvery: getEnvInt('MEMORY_REVIEW_EVERY', 4),
+    maxMemoryItems: getEnvInt('MAX_MEMORY_ITEMS', 80),
+    maxInboxItems: getEnvInt('MAX_INBOX_ITEMS', 30),
+    memoryContextItems: getEnvInt('MEMORY_CONTEXT_ITEMS', 10),
     summaryMaxChars: getEnvInt('SUMMARY_MAX_CHARS', 1200),
-    summaryUpdateEvery: getEnvInt('SUMMARY_UPDATE_EVERY', 10)
+    summaryUpdateEvery: getEnvInt('SUMMARY_UPDATE_EVERY', 10),
+    allowHighSensitivityMemory: getEnvBool('ALLOW_HIGH_SENSITIVITY_MEMORY', false)
   };
 }
 
 function createDefaultData() {
   return {
-    version: 1,
+    version: 3,
     settings: getDefaultSettings(),
     profile: {
+      identity: {},
       userName: '',
       preferences: [],
+      dislikes: [],
+      habits: [],
+      personality: [],
+      communicationStyle: [],
+      boundaries: [],
       facts: [],
       currentProjects: []
     },
@@ -39,6 +50,11 @@ function createDefaultData() {
       content: '',
       updated_at: null,
       lastSummarizedMessageId: 0
+    },
+    memoryItems: [],
+    memoryInbox: [],
+    audit: {
+      lastReviewedMessageId: 0
     },
     conversations: [],
     memories: {},
@@ -63,6 +79,7 @@ function initDatabase() {
       data = {
         ...createDefaultData(),
         ...parsed,
+        version: 3,
         settings: currentSettings,
         profile: {
           ...createDefaultData().profile,
@@ -77,6 +94,13 @@ function initDatabase() {
       data.conversations = data.conversations || [];
       data.memories = data.memories || {};
       data.moodHistory = data.moodHistory || [];
+      data.memoryItems = data.memoryItems || [];
+      data.memoryInbox = data.memoryInbox || [];
+      data.audit = {
+        ...createDefaultData().audit,
+        ...(parsed.audit || {}),
+        lastReviewedMessageId: parsed.audit?.lastReviewedMessageId || parsed.summary?.lastSummarizedMessageId || 0
+      };
 
       // Find max ID
       const maxConvId = data.conversations.reduce((max, c) => Math.max(max, c.id || 0), 0);
@@ -136,11 +160,11 @@ function getMemorySummary() {
   return data.summary?.content || '';
 }
 
-function setMemorySummary(content) {
+function setMemorySummary(content, reviewedMessageId = null) {
   data.summary = {
     content: String(content || '').slice(0, data.settings.summaryMaxChars),
     updated_at: new Date().toISOString(),
-    lastSummarizedMessageId: data.conversations.at(-1)?.id || data.summary.lastSummarizedMessageId || 0
+    lastSummarizedMessageId: reviewedMessageId || data.conversations.at(-1)?.id || data.summary.lastSummarizedMessageId || 0
   };
   saveData();
   return data.summary;
@@ -148,8 +172,14 @@ function setMemorySummary(content) {
 
 function getProfile() {
   return {
+    identity: data.profile.identity || {},
     userName: data.profile.userName || '',
     preferences: data.profile.preferences || [],
+    dislikes: data.profile.dislikes || [],
+    habits: data.profile.habits || [],
+    personality: data.profile.personality || [],
+    communicationStyle: data.profile.communicationStyle || [],
+    boundaries: data.profile.boundaries || [],
     facts: data.profile.facts || [],
     currentProjects: data.profile.currentProjects || []
   };
@@ -157,8 +187,14 @@ function getProfile() {
 
 function setProfile(profile = {}) {
   data.profile = {
+    identity: typeof profile.identity === 'object' && profile.identity ? profile.identity : data.profile.identity || {},
     userName: typeof profile.userName === 'string' ? profile.userName.slice(0, 80) : data.profile.userName || '',
     preferences: Array.isArray(profile.preferences) ? profile.preferences.slice(0, 12) : data.profile.preferences || [],
+    dislikes: Array.isArray(profile.dislikes) ? profile.dislikes.slice(0, 12) : data.profile.dislikes || [],
+    habits: Array.isArray(profile.habits) ? profile.habits.slice(0, 12) : data.profile.habits || [],
+    personality: Array.isArray(profile.personality) ? profile.personality.slice(0, 12) : data.profile.personality || [],
+    communicationStyle: Array.isArray(profile.communicationStyle) ? profile.communicationStyle.slice(0, 12) : data.profile.communicationStyle || [],
+    boundaries: Array.isArray(profile.boundaries) ? profile.boundaries.slice(0, 12) : data.profile.boundaries || [],
     facts: Array.isArray(profile.facts) ? profile.facts.slice(0, 20) : data.profile.facts || [],
     currentProjects: Array.isArray(profile.currentProjects) ? profile.currentProjects.slice(0, 8) : data.profile.currentProjects || []
   };
@@ -166,11 +202,197 @@ function setProfile(profile = {}) {
   return getProfile();
 }
 
-function shouldUpdateSummary() {
+function mergeUnique(existing = [], incoming = [], limit = 12) {
+  const values = [...existing];
+  incoming.forEach(item => {
+    const text = String(item || '').trim();
+    if (text && !values.includes(text)) values.push(text.slice(0, 120));
+  });
+  return values.slice(0, limit);
+}
+
+function mergeProfilePatch(profile = {}) {
+  const current = getProfile();
+  const merged = {
+    identity: { ...current.identity, ...(profile.identity || {}) },
+    userName: typeof profile.userName === 'string' && profile.userName.trim() ? profile.userName : current.userName,
+    preferences: mergeUnique(current.preferences, profile.preferences, 12),
+    dislikes: mergeUnique(current.dislikes, profile.dislikes, 12),
+    habits: mergeUnique(current.habits, profile.habits, 12),
+    personality: mergeUnique(current.personality, profile.personality, 12),
+    communicationStyle: mergeUnique(current.communicationStyle, profile.communicationStyle, 12),
+    boundaries: mergeUnique(current.boundaries, profile.boundaries, 12),
+    facts: mergeUnique(current.facts, profile.facts, 20),
+    currentProjects: mergeUnique(current.currentProjects, profile.currentProjects, 8)
+  };
+  return setProfile(merged);
+}
+
+function shouldReviewMemory() {
   if (!data.settings.memoryEnabled) return false;
   const lastMessageId = data.conversations.at(-1)?.id || 0;
-  const lastSummarized = data.summary.lastSummarizedMessageId || 0;
-  return lastMessageId - lastSummarized >= data.settings.summaryUpdateEvery;
+  const lastReviewed = data.audit.lastReviewedMessageId || 0;
+  return lastMessageId - lastReviewed >= data.settings.memoryReviewEvery;
+}
+
+function getMessagesForMemoryReview(limit = 12) {
+  const lastReviewed = data.audit.lastReviewedMessageId || 0;
+  return data.conversations.filter(c => c.id > lastReviewed).slice(-limit);
+}
+
+function markMemoryReviewed(messageId = null) {
+  const lastId = messageId || data.conversations.at(-1)?.id || data.audit.lastReviewedMessageId || 0;
+  data.audit.lastReviewedMessageId = Math.max(data.audit.lastReviewedMessageId || 0, lastId);
+  data.summary.lastSummarizedMessageId = data.audit.lastReviewedMessageId;
+  saveData();
+  return data.audit.lastReviewedMessageId;
+}
+
+function tokenize(text) {
+  return new Set(String(text || '').toLowerCase().match(/[\p{L}\p{N}]+/gu) || []);
+}
+
+function similarity(a, b) {
+  const left = tokenize(a);
+  const right = tokenize(b);
+  if (left.size === 0 || right.size === 0) return 0;
+  let overlap = 0;
+  left.forEach(token => {
+    if (right.has(token)) overlap++;
+  });
+  return overlap / Math.max(left.size, right.size);
+}
+
+function normalizeMemoryItem(item = {}) {
+  const content = String(item.content || '').trim().slice(0, 120);
+  if (!content) return null;
+  const sensitivity = ['low', 'medium', 'high'].includes(item.sensitivity) ? item.sensitivity : 'low';
+  if (sensitivity === 'high' && !data.settings.allowHighSensitivityMemory) return null;
+  return {
+    id: item.id || `mem_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`,
+    type: String(item.type || 'fact').trim().slice(0, 40),
+    content,
+    evidence: String(item.evidence || '').trim().slice(0, 80),
+    confidence: Math.max(0, Math.min(1, Number(item.confidence) || 0.7)),
+    sensitivity,
+    sourceMessageIds: Array.isArray(item.sourceMessageIds) ? item.sourceMessageIds.slice(0, 8) : [],
+    created_at: item.created_at || new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    last_used_at: item.last_used_at || null,
+    use_count: Number(item.use_count) || 0,
+    status: 'active'
+  };
+}
+
+function upsertMemoryItems(items = []) {
+  const accepted = [];
+  items.forEach(raw => {
+    const item = normalizeMemoryItem(raw);
+    if (!item) return;
+    const existing = data.memoryItems.find(current =>
+      current.status !== 'deleted' &&
+      current.type === item.type &&
+      (current.content.includes(item.content) || item.content.includes(current.content) || similarity(current.content, item.content) >= 0.55)
+    );
+
+    if (existing) {
+      existing.content = item.content.length > existing.content.length ? item.content : existing.content;
+      existing.evidence = item.evidence || existing.evidence || '';
+      existing.confidence = Math.max(existing.confidence || 0, item.confidence);
+      existing.sensitivity = existing.sensitivity === 'high' || item.sensitivity === 'high'
+        ? 'high'
+        : existing.sensitivity === 'medium' || item.sensitivity === 'medium' ? 'medium' : 'low';
+      existing.sourceMessageIds = Array.from(new Set([...(existing.sourceMessageIds || []), ...item.sourceMessageIds])).slice(0, 12);
+      existing.updated_at = new Date().toISOString();
+      accepted.push(existing);
+    } else {
+      data.memoryItems.push(item);
+      accepted.push(item);
+    }
+  });
+
+  data.memoryItems = data.memoryItems
+    .filter(item => item.status !== 'deleted')
+    .sort((a, b) => (b.confidence || 0) - (a.confidence || 0))
+    .slice(0, data.settings.maxMemoryItems);
+  saveData();
+  return accepted;
+}
+
+function addMemoryInboxEntry(entry = {}) {
+  data.memoryInbox.push({
+    id: `inbox_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`,
+    shouldPersist: !!entry.shouldPersist,
+    reason: String(entry.reason || '').slice(0, 200),
+    candidates: Array.isArray(entry.candidates) ? entry.candidates.slice(0, 12) : [],
+    acceptedCount: Number(entry.acceptedCount) || 0,
+    sourceMessageIds: Array.isArray(entry.sourceMessageIds) ? entry.sourceMessageIds.slice(0, 20) : [],
+    created_at: new Date().toISOString()
+  });
+  data.memoryInbox = data.memoryInbox.slice(-data.settings.maxInboxItems);
+  saveData();
+}
+
+function getMemoryItems(limit = null) {
+  const priority = {
+    boundary: 0,
+    communication_style: 1,
+    preference: 2,
+    dislike: 3,
+    work_context: 4,
+    habit: 5,
+    personality: 6,
+    emotional_pattern: 7,
+    profile_identity: 8,
+    relationship: 9,
+    fact: 10
+  };
+  const items = data.memoryItems
+    .filter(item => item.status !== 'deleted')
+    .sort((a, b) => {
+      const rank = (priority[a.type] ?? 50) - (priority[b.type] ?? 50);
+      if (rank !== 0) return rank;
+      return (b.confidence || 0) - (a.confidence || 0);
+    });
+  return typeof limit === 'number' ? items.slice(0, limit) : items;
+}
+
+function getMemoryContextItems() {
+  return getMemoryItems(data.settings.memoryContextItems);
+}
+
+function getMemoryStats() {
+  return {
+    memoryItems: data.memoryItems.filter(item => item.status !== 'deleted').length,
+    inboxItems: data.memoryInbox.length,
+    lastReviewedMessageId: data.audit.lastReviewedMessageId || 0
+  };
+}
+
+function applyMemoryReview(review = {}, reviewedMessageId = null) {
+  const sourceMessageIds = Array.isArray(review.sourceMessageIds)
+    ? review.sourceMessageIds
+    : getMessagesForMemoryReview().map(m => m.id);
+  addMemoryInboxEntry({
+    shouldPersist: review.shouldPersist,
+    reason: review.reason,
+    candidates: review.memoryItems || review.candidates || [],
+    acceptedCount: review.shouldPersist ? (review.memoryItems || []).length : 0,
+    sourceMessageIds
+  });
+
+  if (review.shouldPersist) {
+    upsertMemoryItems(review.memoryItems || []);
+    if (review.profilePatch && typeof review.profilePatch === 'object') {
+      mergeProfilePatch(review.profilePatch);
+    }
+    if (review.summaryPatch || review.summary) {
+      setMemorySummary(review.summaryPatch || review.summary, reviewedMessageId);
+    }
+  }
+
+  markMemoryReviewed(reviewedMessageId);
+  return getMemoryStats();
 }
 
 function getTodayMessageCount() {
@@ -233,6 +455,9 @@ function clearMemory() {
   data.conversations = [];
   data.memories = {};
   data.moodHistory = [];
+  data.memoryItems = [];
+  data.memoryInbox = [];
+  data.audit = createDefaultData().audit;
   data.profile = createDefaultData().profile;
   data.summary = createDefaultData().summary;
   nextId = 1;
@@ -252,5 +477,8 @@ module.exports = {
   saveMood, getLastMood, getLastMoodReason,
   cleanOldConversations,
   getMemorySettings, getMemorySummary, setMemorySummary,
-  getProfile, setProfile, shouldUpdateSummary, clearMemory
+  getProfile, setProfile, mergeProfilePatch,
+  shouldReviewMemory, getMessagesForMemoryReview, markMemoryReviewed,
+  applyMemoryReview, getMemoryItems, getMemoryContextItems, getMemoryStats,
+  clearMemory
 };

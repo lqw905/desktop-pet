@@ -261,7 +261,9 @@ app.whenReady().then(async () => {
       recentMessages,
       memorySettings: memory.getMemorySettings(),
       memorySummary: memory.getMemorySummary(),
-      profile: memory.getProfile()
+      profile: memory.getProfile(),
+      memoryItems: memory.getMemoryItems(8),
+      memoryStats: memory.getMemoryStats()
     };
   });
 
@@ -271,7 +273,9 @@ app.whenReady().then(async () => {
       ok: true,
       memorySettings: memory.getMemorySettings(),
       memorySummary: memory.getMemorySummary(),
-      profile: memory.getProfile()
+      profile: memory.getProfile(),
+      memoryItems: memory.getMemoryItems(8),
+      memoryStats: memory.getMemoryStats()
     };
   });
 

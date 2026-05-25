@@ -1,9 +1,24 @@
-const DEEPSEEK_BASE = 'https://api.deepseek.com';
-const MODEL = 'deepseek-chat';
+const API_BASE = (process.env.AI_BASE_URL || process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com').replace(/\/$/, '');
+const MODEL = process.env.AI_MODEL || 'deepseek-chat';
 const TIMEOUT = 30000;
 
 // 从环境变量读取 API Key，也可直接替换字符串
-const API_KEY = process.env.DEEPSEEK_API_KEY || '';
+const API_KEY = process.env.AI_API_KEY || process.env.OPENROUTER_API_KEY || process.env.DEEPSEEK_API_KEY || '';
+const PROVIDER_NAME = process.env.AI_PROVIDER || (API_BASE.includes('openrouter.ai') ? 'OpenRouter' : 'DeepSeek');
+
+function buildHeaders() {
+  const headers = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${API_KEY}`
+  };
+
+  if (API_BASE.includes('openrouter.ai')) {
+    headers['HTTP-Referer'] = 'http://localhost/desktop-pet';
+    headers['X-Title'] = 'Desktop Pet';
+  }
+
+  return headers;
+}
 
 /**
  * Call DeepSeek API (non-streaming).
@@ -29,22 +44,19 @@ async function callDeepseek(prompt, options = {}) {
       body.response_format = { type: 'json_object' };
     }
 
-    const response = await fetch(`${DEEPSEEK_BASE}/v1/chat/completions`, {
+    const response = await fetch(`${API_BASE}/v1/chat/completions`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${API_KEY}`
-      },
+      headers: buildHeaders(),
       body: JSON.stringify(body),
       signal: controller.signal
     });
 
     if (!response.ok) {
       const errText = await response.text().catch(() => '');
-      let errMsg = `DeepSeek API error: ${response.status}`;
-      if (response.status === 401) errMsg = 'DeepSeek API Key 无效，请检查配置';
-      else if (response.status === 402) errMsg = 'DeepSeek 账户余额不足';
-      else if (response.status === 429) errMsg = 'DeepSeek API 请求频率过高，请稍后重试';
+      let errMsg = `${PROVIDER_NAME} API error: ${response.status}`;
+      if (response.status === 401) errMsg = `${PROVIDER_NAME} API Key 无效，请检查配置`;
+      else if (response.status === 402) errMsg = `${PROVIDER_NAME} 账户余额不足或免费额度不可用`;
+      else if (response.status === 429) errMsg = `${PROVIDER_NAME} API 请求频率过高，请稍后重试`;
       else if (errText) {
         try {
           const errJson = JSON.parse(errText);
@@ -58,7 +70,7 @@ async function callDeepseek(prompt, options = {}) {
     const text = (data.choices?.[0]?.message?.content || '').trim();
 
     if (!text) {
-      throw new Error('DeepSeek returned empty response');
+      throw new Error(`${PROVIDER_NAME} returned empty response`);
     }
 
     return text;
@@ -88,22 +100,25 @@ async function callDeepseekStream(prompt, options = {}, onToken) {
       stream_options: { include_usage: false }
     };
 
-    const response = await fetch(`${DEEPSEEK_BASE}/v1/chat/completions`, {
+    const response = await fetch(`${API_BASE}/v1/chat/completions`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${API_KEY}`
-      },
+      headers: buildHeaders(),
       body: JSON.stringify(body),
       signal: controller.signal
     });
 
     if (!response.ok) {
       const errText = await response.text().catch(() => '');
-      let errMsg = `DeepSeek API error: ${response.status}`;
-      if (response.status === 401) errMsg = 'DeepSeek API Key 无效，请检查配置';
-      else if (response.status === 402) errMsg = 'DeepSeek 账户余额不足';
-      else if (response.status === 429) errMsg = 'DeepSeek API 请求频率过高，请稍后重试';
+      let errMsg = `${PROVIDER_NAME} API error: ${response.status}`;
+      if (response.status === 401) errMsg = `${PROVIDER_NAME} API Key 无效，请检查配置`;
+      else if (response.status === 402) errMsg = `${PROVIDER_NAME} 账户余额不足或免费额度不可用`;
+      else if (response.status === 429) errMsg = `${PROVIDER_NAME} API 请求频率过高，请稍后重试`;
+      else if (errText) {
+        try {
+          const errJson = JSON.parse(errText);
+          errMsg = errJson.error?.message || errMsg;
+        } catch {}
+      }
       throw new Error(errMsg);
     }
 
@@ -142,7 +157,7 @@ async function callDeepseekStream(prompt, options = {}, onToken) {
 
     const result = fullResponse.trim();
     if (!result) {
-      throw new Error('DeepSeek returned empty response');
+      throw new Error(`${PROVIDER_NAME} returned empty response`);
     }
 
     return result;
@@ -155,28 +170,28 @@ async function callDeepseekStream(prompt, options = {}, onToken) {
  * Check if the API key is configured (simple validation).
  */
 async function checkStatus() {
-  if (!API_KEY || API_KEY.startsWith('sk-your-deepseek-api-key')) {
-    return { ok: false, error: 'DeepSeek API Key 未配置，请在 electron/deepseek.js 中设置' };
+  if (!API_KEY || API_KEY.startsWith('sk-your-key')) {
+    return { ok: false, error: `${PROVIDER_NAME} API Key 未配置，请在 .env 中设置 AI_API_KEY` };
   }
 
   try {
-    const response = await fetch(`${DEEPSEEK_BASE}/v1/models`, {
-      headers: { 'Authorization': `Bearer ${API_KEY}` },
+    const response = await fetch(`${API_BASE}/v1/models`, {
+      headers: buildHeaders(),
       signal: AbortSignal.timeout(10000)
     });
 
     if (response.ok) {
-      return { ok: true, model: MODEL };
+      return { ok: true, provider: PROVIDER_NAME, model: MODEL };
     }
 
     if (response.status === 401) {
       return { ok: false, error: 'API Key 无效' };
     }
 
-    return { ok: false, error: `API 状态异常 (${response.status})` };
+    return { ok: false, error: `${PROVIDER_NAME} API 状态异常 (${response.status})` };
   } catch (err) {
-    return { ok: false, error: `无法连接到 DeepSeek API: ${err.message}` };
+    return { ok: false, error: `无法连接到 ${PROVIDER_NAME} API: ${err.message}` };
   }
 }
 
-module.exports = { callDeepseek, callDeepseekStream, checkStatus, MODEL };
+module.exports = { callDeepseek, callDeepseekStream, checkStatus, MODEL, API_BASE, PROVIDER_NAME };

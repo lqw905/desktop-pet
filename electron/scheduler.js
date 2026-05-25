@@ -1,11 +1,12 @@
 const { callDeepseek, callDeepseekStream } = require('./deepseek');
 const { buildSentryPrompt, buildChatPrompt } = require('./prompts');
-const { buildContext, markUserActive, getTimeContext, getActiveWindowTitle, getIdleMinutes, isWorkContext } = require('./events');
+const { buildContext, markUserActive, getTimeContext, getActiveWindowContext, getIdleMinutes, isWorkContext } = require('./events');
 const { getCurrentMood, triggerEvent, getProactiveInterval } = require('./mood');
 const {
   saveMessage, getRecentConversations, getTodayMessageCount,
   getLastPetMessageTime, getMemorySettings, getMemorySummary,
-  setMemorySummary, getProfile, setProfile, shouldUpdateSummary
+  getProfile, shouldReviewMemory, getMessagesForMemoryReview,
+  markMemoryReviewed, applyMemoryReview, getMemoryContextItems
 } = require('./memory');
 const { getPetWindow } = require('./window');
 
@@ -65,11 +66,13 @@ async function generateReply(userMessage) {
 
   const settings = getMemorySettings();
   const conversations = getRecentConversations(settings.chatContextMessages);
+  const windowContext = getActiveWindowContext();
   const context = {
     time: new Date().toLocaleString('zh-CN'),
-    activeWindow: getActiveWindowTitle(),
+    ...windowContext,
     memorySummary: getMemorySummary(),
-    profile: getProfile()
+    profile: getProfile(),
+    memoryItems: getMemoryContextItems()
   };
   const prompt = buildChatPrompt(conversations, getCurrentMood(), context);
 
@@ -121,11 +124,13 @@ async function generateReplyStreaming(userMessage, chatWindow) {
 
   const settings = getMemorySettings();
   const conversations = getRecentConversations(settings.chatContextMessages);
+  const windowContext = getActiveWindowContext();
   const context = {
     time: new Date().toLocaleString('zh-CN'),
-    activeWindow: getActiveWindowTitle(),
+    ...windowContext,
     memorySummary: getMemorySummary(),
-    profile: getProfile()
+    profile: getProfile(),
+    memoryItems: getMemoryContextItems()
   };
   const prompt = buildChatPrompt(conversations, getCurrentMood(), context);
 
@@ -364,27 +369,46 @@ function formatRecentConvForSentry() {
 
 async function maybeUpdateLongTermMemory() {
   const settings = getMemorySettings();
-  if (!settings.memoryEnabled || !shouldUpdateSummary() || isUpdatingMemory) return;
+  if (!settings.memoryEnabled || !shouldReviewMemory() || isUpdatingMemory) return;
   if (Date.now() - lastMemoryUpdateErrorAt < 10 * 60 * 1000) return;
+
+  const messages = getMessagesForMemoryReview(Math.max(settings.memoryReviewEvery, 10));
+  if (messages.length === 0) return;
+
+  if (!hasMemorySignal(messages)) {
+    markMemoryReviewed(messages.at(-1)?.id);
+    return;
+  }
 
   isUpdatingMemory = true;
   try {
-    const recent = getRecentConversations(Math.max(settings.summaryUpdateEvery, 12));
     const existingSummary = getMemorySummary();
     const existingProfile = getProfile();
-    const recentText = recent.map(m =>
+    const existingMemories = getMemoryContextItems();
+    const recentText = messages.map(m =>
       `[${m.role === 'user' ? '用户' : '宠物'}]: ${m.content.substring(0, 220)}`
     ).join('\n');
 
-    const prompt = `你在维护桌面宠物的长期记忆。请基于旧记忆和最近对话，输出精简 JSON。
+    const prompt = `你是桌宠“小伴”的长期记忆审查器。你的任务不是总结聊天，而是判断哪些信息未来陪伴主人时值得长期记住。
 
-要求：
-- summary 保留长期有用的信息，不记录一次性闲聊
-- preferences 记录用户明确表达的偏好
-- facts 记录稳定事实
-- currentProjects 记录正在进行的项目
-- summary 不超过 ${settings.summaryMaxChars} 个中文字符
+保存倾向：
+- 凡是涉及主人的个人信息、习惯、喜好、厌恶、性格、沟通方式、项目目标、长期边界、与桌宠的互动偏好，都倾向保存
+- 即使只出现一次，只要是明确偏好或稳定事实，也可以保存
+- 不要保存 API Key、密码、token、cookie、身份证、详细地址、财务、医疗等高敏信息，除非主人明确要求“记住”
+- 不要保存一次性错误日志、临时命令输出、大段代码原文
+- 相似记忆要合并成更短更稳定的表达
+
+记忆类型只能使用：
+profile_identity, preference, dislike, habit, personality, communication_style, work_context, emotional_pattern, boundary, relationship, fact
+
+敏感度：
+low=普通偏好/项目上下文；medium=性格/习惯/情绪模式；high=身份位置健康财务等高敏信息
+
+输出要求：
 - 只输出 JSON，不要解释
+- 每条 memoryItems.content 不超过 80 个中文字符
+- evidence 不超过 40 个中文字符
+- summaryPatch 不超过 ${settings.summaryMaxChars} 个中文字符
 
 旧长期摘要：
 ${existingSummary || '（无）'}
@@ -392,24 +416,49 @@ ${existingSummary || '（无）'}
 旧用户画像：
 ${JSON.stringify(existingProfile)}
 
-最近对话：
+已有关键记忆：
+${existingMemories.map(m => `- ${m.type}: ${m.content}`).join('\n') || '（无）'}
+
+待审查对话：
 ${recentText}
 
 JSON 格式：
-{"summary":"...","profile":{"userName":"","preferences":[],"facts":[],"currentProjects":[]}}`;
+{
+  "shouldPersist": true或false,
+  "reason": "判断理由",
+  "sourceMessageIds": [消息id],
+  "memoryItems": [
+    {
+      "type": "communication_style",
+      "content": "主人偏好先看方案，再决定是否改代码。",
+      "evidence": "用户说先给方案",
+      "confidence": 0.95,
+      "sensitivity": "low",
+      "sourceMessageIds": [1,2]
+    }
+  ],
+  "profilePatch": {
+    "identity": {},
+    "userName": "",
+    "preferences": [],
+    "dislikes": [],
+    "habits": [],
+    "personality": [],
+    "communicationStyle": [],
+    "boundaries": [],
+    "facts": [],
+    "currentProjects": []
+  },
+  "summaryPatch": "长期摘要补丁"
+}`;
 
     const raw = await callDeepseek(prompt, {
       temperature: 0.2,
-      maxTokens: 700,
+      maxTokens: 900,
       format: 'json'
     });
     const parsed = extractJson(raw);
-    if (parsed?.summary) {
-      setMemorySummary(parsed.summary);
-    }
-    if (parsed?.profile && typeof parsed.profile === 'object') {
-      setProfile(parsed.profile);
-    }
+    applyMemoryReview(parsed || { shouldPersist: false, reason: 'LLM 未返回有效审查结果' }, messages.at(-1)?.id);
     lastMemoryUpdateErrorAt = 0;
   } catch (err) {
     lastMemoryUpdateErrorAt = Date.now();
@@ -417,6 +466,23 @@ JSON 格式：
   } finally {
     isUpdatingMemory = false;
   }
+}
+
+function hasMemorySignal(messages) {
+  const text = messages
+    .filter(m => m.role === 'user')
+    .map(m => m.content)
+    .join('\n');
+  if (!text) return false;
+  const patterns = [
+    /记住|别忘|以后|下次|每次|总是|不要|别再|希望|喜欢|不喜欢|讨厌/,
+    /我叫|我是|我的名字|称呼我|叫我|主人/,
+    /我习惯|我一般|我经常|我通常|我比较|我在意|我偏好/,
+    /先.*方案|先.*解释|直接.*操作|直接.*改|少废话|简短|详细/,
+    /性格|习惯|喜好|偏好|隐私|边界|风格/,
+    /项目|长期|目标|正在做|计划|工作流/
+  ];
+  return patterns.some(pattern => pattern.test(text));
 }
 
 // 本地快速关键词检测（即时、无网络延迟）

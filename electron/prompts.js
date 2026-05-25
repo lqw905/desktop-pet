@@ -11,6 +11,9 @@ function buildSentryPrompt(context) {
 - 你的心情：${context.mood}
 - 距离上次发言：${context.minutesSinceLastSpeak} 分钟
 - 用户当前窗口：${context.activeWindow || '未知'}
+- 当前活动类型：${context.activityType || 'unknown'}
+- 最近 1 分钟窗口切换：${context.recentWindowSwitches || 0} 次
+- 最近使用过的 App：${context.recentApps?.length ? context.recentApps.join('、') : '未知'}
 
 长期记忆：
 ${context.memorySummary || '（暂无长期记忆）'}
@@ -25,6 +28,7 @@ ${context.recentConversations}
 4. 如果用户当前窗口和你的知识有关，可以自然地提起（比如看到IDE就关心编程累了没，看到文档就感叹好认真）
 5. 偶尔可以自言自语式地分享一些小感想、小确幸，不用每次都等到"有意义的事"
 6. 保持简短，一到三句话
+7. 长期记忆只是背景信息，不是实时窗口观测；当前窗口未知时，不要断言用户正在做某件具体事情
 
 请用JSON格式回复，只输出JSON不要其他文字：
 {"should_speak": true或false, "message": "如果开口，想说的简短内容", "reason": "判断理由"}`;
@@ -43,6 +47,14 @@ function buildChatPrompt(conversationHistory, mood, context = {}) {
   if (profile.preferences?.length) profileLines.push(`- 用户偏好：${profile.preferences.join('；')}`);
   if (profile.facts?.length) profileLines.push(`- 已知事实：${profile.facts.join('；')}`);
   if (profile.currentProjects?.length) profileLines.push(`- 当前项目：${profile.currentProjects.join('；')}`);
+  if (profile.dislikes?.length) profileLines.push(`- 不喜欢：${profile.dislikes.join('；')}`);
+  if (profile.habits?.length) profileLines.push(`- 习惯：${profile.habits.join('；')}`);
+  if (profile.personality?.length) profileLines.push(`- 性格倾向：${profile.personality.join('；')}`);
+  if (profile.communicationStyle?.length) profileLines.push(`- 沟通风格：${profile.communicationStyle.join('；')}`);
+  if (profile.boundaries?.length) profileLines.push(`- 边界：${profile.boundaries.join('；')}`);
+
+  const memoryItems = Array.isArray(context.memoryItems) ? context.memoryItems : [];
+  const memoryItemLines = memoryItems.map(item => `- ${item.content}`).join('\n');
 
   const timeStr = context.time || new Date().toLocaleString('zh-CN');
   const moodMap = {
@@ -82,16 +94,22 @@ function buildChatPrompt(conversationHistory, mood, context = {}) {
 - 适当使用颜文字：(◍•ᴗ•◍)、(｡•́︿•̀｡)、(*´▽\`*)、₍₍◝(・ω・)◟⁾⁾、o(╥﹏╥)o 等
 - 但不要每句话都堆颜文字，自然就好
 - 用户说正事时要认真，但不用切换成机器人语气，保持温暖
+- 长期记忆只是背景信息，不代表你正在实时看到主人当前在做什么
+- 如果用户问“我在干什么”“猜猜我在做什么”，但当前窗口未知，不要肯定地说主人正在做某事；只能说明“我只能根据记忆猜”
 
 当前时间：${timeStr}
 你现在的心情：${moodMap[mood] || '正常'}
 用户正在看：${context.activeWindow || '未知'}
+当前活动类型：${context.activityType || 'unknown'}
 
 长期记忆摘要：
 ${context.memorySummary || '（暂无长期记忆）'}
 
 用户画像：
 ${profileLines.length ? profileLines.join('\n') : '（暂无用户画像）'}
+
+关键主人记忆：
+${memoryItemLines || '（暂无关键记忆）'}
 
 对话历史：
 ${historyStr || '（暂无最近对话）'}

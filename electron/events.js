@@ -2,18 +2,92 @@ const { execFileSync, execSync } = require('child_process');
 const path = require('path');
 
 const PET_WINDOW_TITLES = ['Chat with Pet', 'Desktop Pet'];
+const PET_WINDOW_APPS = ['Electron'];
+const ACTIVE_WINDOW_CACHE_MS = 5000;
+const MAX_RECENT_WINDOWS = 5;
 
 let idleStartTime = null;
 let idleChecked = false;
 let cachedWindowTitle = null;
+let cachedWindowInfo = null;
 let cachedWindowAt = 0;
 let lastUserWindow = null;
+let lastUserWindowInfo = null;
+let recentWindows = [];
+
+function parseActiveWindow(rawTitle) {
+  const raw = String(rawTitle || '').trim();
+  if (!raw) return null;
+  const separator = raw.indexOf(' - ');
+  if (separator === -1) {
+    return {
+      raw,
+      app: raw,
+      title: '',
+      activityType: classifyActivity(raw, '')
+    };
+  }
+  const app = raw.slice(0, separator).trim();
+  const title = raw.slice(separator + 3).trim();
+  return {
+    raw,
+    app,
+    title,
+    activityType: classifyActivity(app, title)
+  };
+}
+
+function classifyActivity(app, title) {
+  const text = `${app} ${title}`.toLowerCase();
+  const rules = [
+    ['coding', ['cursor', 'visual studio code', 'vscode', 'webstorm', 'intellij', 'xcode', 'sublime', 'atom']],
+    ['terminal', ['terminal', 'iterm', 'warp', 'hyper']],
+    ['browser', ['chrome', 'safari', 'firefox', 'edge', 'arc', 'browser']],
+    ['writing', ['word', 'pages', 'notes', 'notion', 'obsidian', 'typora', 'markdown']],
+    ['design', ['figma', 'sketch', 'photoshop', 'illustrator']],
+    ['files', ['finder']],
+    ['chat', ['wechat', '微信', 'slack', 'discord', 'telegram', 'messages', 'qq']],
+    ['media', ['music', 'spotify', 'youtube', 'vlc', 'quicktime']]
+  ];
+  const match = rules.find(([, keywords]) => keywords.some(keyword => text.includes(keyword)));
+  return match ? match[0] : 'unknown';
+}
+
+function isPetWindow(rawTitle) {
+  return rawTitle && PET_WINDOW_TITLES.some(t => rawTitle.includes(t));
+}
+
+function isPetWindowInfo(info) {
+  if (!info) return false;
+  return isPetWindow(info.raw) || PET_WINDOW_APPS.includes(info.app);
+}
+
+function rememberActiveWindow(info) {
+  if (!info) return;
+  const previous = recentWindows[recentWindows.length - 1];
+  if (previous && previous.raw === info.raw) {
+    previous.at = Date.now();
+    return;
+  }
+
+  recentWindows.push({ ...info, at: Date.now() });
+  recentWindows = recentWindows.slice(-MAX_RECENT_WINDOWS);
+}
+
+function getRecentWindowSwitches() {
+  const cutoff = Date.now() - 60 * 1000;
+  return recentWindows.filter(item => item.at >= cutoff).length;
+}
 
 function getActiveWindowTitle() {
+  return getActiveWindowContext().activeWindow;
+}
+
+function getActiveWindowContext() {
   const now = Date.now();
 
   // Only run the detection if cache expired
-  if (!cachedWindowTitle || now - cachedWindowAt >= 20000) {
+  if (!cachedWindowInfo || now - cachedWindowAt >= ACTIVE_WINDOW_CACHE_MS) {
     try {
       if (process.platform === 'win32') {
         const scriptPath = path.join(__dirname, 'get-window.ps1');
@@ -51,19 +125,36 @@ function getActiveWindowTitle() {
       cachedWindowTitle = null;
     }
     cachedWindowAt = now;
+    cachedWindowInfo = parseActiveWindow(cachedWindowTitle);
   }
 
   // Ignore pet's own windows — return the last real user window instead
-  if (cachedWindowTitle && PET_WINDOW_TITLES.some(t => cachedWindowTitle.includes(t))) {
-    return lastUserWindow;
+  if (isPetWindowInfo(cachedWindowInfo)) {
+    return {
+      activeWindow: lastUserWindow,
+      activeApp: lastUserWindowInfo?.app || null,
+      activeWindowTitle: lastUserWindowInfo?.title || null,
+      activityType: lastUserWindowInfo?.activityType || 'unknown',
+      recentWindowSwitches: getRecentWindowSwitches(),
+      recentApps: recentWindows.map(item => item.app).filter(Boolean)
+    };
   }
 
   // Remember this as the last real user window
-  if (cachedWindowTitle) {
+  if (cachedWindowTitle && cachedWindowInfo) {
     lastUserWindow = cachedWindowTitle;
+    lastUserWindowInfo = cachedWindowInfo;
+    rememberActiveWindow(cachedWindowInfo);
   }
 
-  return cachedWindowTitle;
+  return {
+    activeWindow: cachedWindowTitle,
+    activeApp: cachedWindowInfo?.app || null,
+    activeWindowTitle: cachedWindowInfo?.title || null,
+    activityType: cachedWindowInfo?.activityType || 'unknown',
+    recentWindowSwitches: getRecentWindowSwitches(),
+    recentApps: recentWindows.map(item => item.app).filter(Boolean)
+  };
 }
 
 /**
@@ -131,7 +222,7 @@ function isWorkContext() {
 function buildContext(conversationContext, mood) {
   const timeCtx = getTimeContext();
   const idleMin = getIdleMinutes();
-  const activeWindow = getActiveWindowTitle();
+  const windowContext = getActiveWindowContext();
 
   return {
     time: `${timeCtx.weekday} ${timeCtx.time}`,
@@ -141,10 +232,10 @@ function buildContext(conversationContext, mood) {
     isMorning: timeCtx.isMorning,
     isWeekend: timeCtx.isWeekend,
     isWorkContext: isWorkContext(),
-    activeWindow,
+    ...windowContext,
     mood,
     ...conversationContext
   };
 }
 
-module.exports = { getTimeContext, getIdleMinutes, markUserActive, isWorkContext, buildContext, getActiveWindowTitle };
+module.exports = { getTimeContext, getIdleMinutes, markUserActive, isWorkContext, buildContext, getActiveWindowTitle, getActiveWindowContext };
