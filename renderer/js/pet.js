@@ -1,4 +1,6 @@
 // --- DOM Elements ---
+const petStage = document.getElementById('pet-stage');
+const petRoller = document.getElementById('pet-roller');
 const petBody = document.getElementById('pet-body');
 const bubble = document.getElementById('bubble');
 const bubbleText = document.getElementById('bubble-text');
@@ -17,6 +19,75 @@ let dragOffsetX = 0;
 let dragOffsetY = 0;
 let dragOriginX = 0;
 let dragOriginY = 0;
+
+// --- Gentle local rolling ---
+const ROLL_RANGE = 42;
+const ROLL_STOP_DISTANCE = 120;
+const ROLL_DURATION = 1450;
+const ROLL_DURATION_PER_TURN = 1150;
+let rollX = 0;
+let rollTargetX = 0;
+let rollRotation = 0;
+let lastRollFrameAt = 0;
+let nextRollTargetAt = 0;
+let isPointerNearPet = false;
+let activeRoll = null;
+
+function pickRollTarget(now = performance.now()) {
+  let rollDirection = Math.random() > 0.5 ? 1 : -1;
+  if (rollX > ROLL_RANGE * 0.65) rollDirection = -1;
+  if (rollX < -ROLL_RANGE * 0.65) rollDirection = 1;
+  const turns = 1 + Math.floor(Math.random() * 3);
+
+  activeRoll = {
+    startAt: now,
+    duration: ROLL_DURATION + (turns - 1) * ROLL_DURATION_PER_TURN,
+    fromX: rollX,
+    toX: rollDirection * ROLL_RANGE,
+    fromRotation: rollRotation,
+    toRotation: rollRotation + rollDirection * 360 * turns
+  };
+  rollTargetX = activeRoll.toX;
+  nextRollTargetAt = Number.POSITIVE_INFINITY;
+}
+
+function easeInOutCubic(t) {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
+function animateLocalRoll(now) {
+  if (!lastRollFrameAt) {
+    lastRollFrameAt = now;
+    nextRollTargetAt = now + 1800 + Math.random() * 2400;
+  }
+
+  lastRollFrameAt = now;
+
+  const shouldPause = isPointerNearPet || isDragging || expressionLocked;
+  if (shouldPause && !activeRoll) {
+    nextRollTargetAt = now + 1200;
+  } else if (!shouldPause && !activeRoll && now >= nextRollTargetAt) {
+    pickRollTarget(now);
+  }
+
+  if (activeRoll) {
+    const progress = Math.min(1, (now - activeRoll.startAt) / activeRoll.duration);
+    const eased = easeInOutCubic(progress);
+    rollX = activeRoll.fromX + (activeRoll.toX - activeRoll.fromX) * eased;
+    rollRotation = activeRoll.fromRotation + (activeRoll.toRotation - activeRoll.fromRotation) * eased;
+
+    if (progress >= 1) {
+      rollX = activeRoll.toX;
+      rollRotation = activeRoll.toRotation;
+      activeRoll = null;
+      nextRollTargetAt = now + 2600 + Math.random() * 3600;
+    }
+  }
+
+  petStage?.style.setProperty('--roll-x', `${rollX.toFixed(2)}px`);
+  petRoller?.style.setProperty('--roll-rotation', `${rollRotation.toFixed(2)}deg`);
+  requestAnimationFrame(animateLocalRoll);
+}
 
 function applyFaceClasses() {
   const expressionClasses = Array.from(petBody.classList)
@@ -63,6 +134,8 @@ function updateLookAtMouse(e) {
 
   petBody.style.setProperty('--look-x', `${lookX.toFixed(2)}px`);
   petBody.style.setProperty('--look-y', `${lookY.toFixed(2)}px`);
+  isPointerNearPet = distance < ROLL_STOP_DISTANCE;
+  if (isPointerNearPet) rollTargetX = rollX;
 
   if (isDragging || expressionLocked) return;
   if (distance < 70) {
@@ -206,7 +279,10 @@ setTimeout(() => {
 }, 500);
 
 document.addEventListener('mouseleave', () => {
+  isPointerNearPet = false;
   petBody.style.setProperty('--look-x', '0px');
   petBody.style.setProperty('--look-y', '0px');
   if (!expressionLocked) setExpression('idle');
 });
+
+requestAnimationFrame(animateLocalRoll);

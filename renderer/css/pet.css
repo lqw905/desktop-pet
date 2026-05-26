@@ -98,6 +98,30 @@ body {
   border-top: 8px solid rgba(255, 255, 255, 0.95);
 }
 
+/* ===== Pet Rolling Stage ===== */
+#pet-stage {
+  --roll-x: 0px;
+  --roll-rotation: 0deg;
+  position: relative;
+  width: 148px;
+  height: 118px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  transform: translateX(var(--roll-x));
+  transform-origin: center bottom;
+  will-change: transform;
+}
+
+#pet-roller {
+  width: 90px;
+  height: 90px;
+  transform: rotate(var(--roll-rotation));
+  transform-origin: center center;
+  will-change: transform;
+}
+
 /* ===== Pet Body ===== */
 #pet-body {
   width: 90px;
@@ -437,6 +461,11 @@ body {
 #pet-body.mood-bored ~ #pet-shadow   { animation: shadow-sleepy 5s ease-in-out infinite; }
 #pet-body.mood-sleepy ~ #pet-shadow  { animation: shadow-sleepy 5s ease-in-out infinite; }
 #pet-body.mood-caring ~ #pet-shadow  { animation: shadow-happy 3.5s ease-in-out infinite; }
+#pet-stage:has(#pet-body.mood-happy) #pet-shadow   { animation: shadow-happy 3s ease-in-out infinite; }
+#pet-stage:has(#pet-body.mood-excited) #pet-shadow { animation: shadow-excited 1.5s ease-in-out infinite; }
+#pet-stage:has(#pet-body.mood-bored) #pet-shadow   { animation: shadow-sleepy 5s ease-in-out infinite; }
+#pet-stage:has(#pet-body.mood-sleepy) #pet-shadow  { animation: shadow-sleepy 5s ease-in-out infinite; }
+#pet-stage:has(#pet-body.mood-caring) #pet-shadow  { animation: shadow-happy 3.5s ease-in-out infinite; }
 
 /* ===== Bubble animation ===== */
 @keyframes bubble-pop-in {
