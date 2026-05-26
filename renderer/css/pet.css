@@ -14,6 +14,7 @@ body {
 
 #pet-container {
   --roll-x: 0px;
+  --bubble-x: 0px;
   position: relative;
   width: 240px;
   height: 320px;
@@ -28,7 +29,7 @@ body {
 #bubble {
   position: absolute;
   bottom: 150px;
-  left: calc(50% + var(--roll-x));
+  left: calc(50% + var(--bubble-x));
   transform: translateX(-50%);
   background: rgba(255, 255, 255, 0.95);
   border-radius: 16px;

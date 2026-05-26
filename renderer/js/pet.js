@@ -22,38 +22,121 @@ let dragOriginX = 0;
 let dragOriginY = 0;
 
 // --- Gentle local rolling ---
-const ROLL_RANGE = 42;
 const ROLL_STOP_DISTANCE = 120;
-const ROLL_DURATION = 1450;
-const ROLL_DURATION_PER_TURN = 1150;
-let rollX = 0;
-let rollTargetX = 0;
+const PET_BODY_DIAMETER = 90;
+const PET_BODY_CIRCUMFERENCE = Math.PI * PET_BODY_DIAMETER;
+const PET_WINDOW_WIDTH = 240;
+const PET_WINDOW_HEIGHT = 320;
+const PET_MIN_VISIBLE = 40;
+const ROLL_SPEED_PX_PER_MS = 0.18;
+const MIN_ROLL_DURATION = 1200;
 let rollRotation = 0;
 let lastRollFrameAt = 0;
 let nextRollTargetAt = 0;
 let isPointerNearPet = false;
 let activeRoll = null;
+let isPickingRoll = false;
 
-function pickRollTarget(now = performance.now()) {
-  let rollDirection = Math.random() > 0.5 ? 1 : -1;
-  if (rollX > ROLL_RANGE * 0.65) rollDirection = -1;
-  if (rollX < -ROLL_RANGE * 0.65) rollDirection = 1;
-  const turns = 1 + Math.floor(Math.random() * 3);
+function getMotionBounds() {
+  const display = window.screen || {};
+  const left = Number.isFinite(display.availLeft) ? display.availLeft : 0;
+  const top = Number.isFinite(display.availTop) ? display.availTop : 0;
+  const width = Number.isFinite(display.availWidth) ? display.availWidth : display.width;
+  const height = Number.isFinite(display.availHeight) ? display.availHeight : display.height;
 
-  activeRoll = {
-    startAt: now,
-    duration: ROLL_DURATION + (turns - 1) * ROLL_DURATION_PER_TURN,
-    fromX: rollX,
-    toX: rollDirection * ROLL_RANGE,
-    fromRotation: rollRotation,
-    toRotation: rollRotation + rollDirection * 360 * turns
+  return {
+    minX: left - PET_WINDOW_WIDTH + PET_MIN_VISIBLE,
+    maxX: left + width - PET_MIN_VISIBLE,
+    minY: top - PET_WINDOW_HEIGHT + PET_MIN_VISIBLE,
+    maxY: top + height - PET_MIN_VISIBLE
   };
-  rollTargetX = activeRoll.toX;
-  nextRollTargetAt = Number.POSITIVE_INFINITY;
+}
+
+function shuffle(items) {
+  return items
+    .map((item) => ({ item, sort: Math.random() }))
+    .sort((a, b) => a.sort - b.sort)
+    .map(({ item }) => item);
+}
+
+function isTargetInsideBounds(position, dx, dy, bounds) {
+  const targetX = position.x + dx;
+  const targetY = position.y + dy;
+  return targetX >= bounds.minX && targetX <= bounds.maxX && targetY >= bounds.minY && targetY <= bounds.maxY;
+}
+
+function buildRollPlan(position) {
+  const bounds = getMotionBounds();
+  const turnOptions = shuffle([1, 2, 3]);
+  const angleOptions = shuffle([
+    0,
+    Math.PI / 4,
+    Math.PI / 2,
+    (3 * Math.PI) / 4,
+    Math.PI,
+    (5 * Math.PI) / 4,
+    (3 * Math.PI) / 2,
+    (7 * Math.PI) / 4
+  ]);
+
+  for (const turns of turnOptions) {
+    const distance = PET_BODY_CIRCUMFERENCE * turns;
+
+    for (const angle of angleOptions) {
+      const dx = Math.cos(angle) * distance;
+      const dy = Math.sin(angle) * distance;
+      if (!isTargetInsideBounds(position, dx, dy, bounds)) continue;
+
+      const rotationSign = Math.abs(dx) >= Math.abs(dy)
+        ? Math.sign(dx || 1)
+        : Math.sign(dy || 1);
+      return { dx, dy, distance, turns, rotationSign };
+    }
+  }
+
+  return null;
+}
+
+async function pickRollTarget(now = performance.now()) {
+  if (activeRoll || isPickingRoll) return;
+
+  isPickingRoll = true;
+  try {
+    const position = await window.petAPI?.getPosition?.();
+    const plan = position ? buildRollPlan(position) : null;
+    if (!plan) {
+      nextRollTargetAt = now + 1800;
+      return;
+    }
+
+    activeRoll = {
+      startAt: performance.now(),
+      duration: Math.max(MIN_ROLL_DURATION, plan.distance / ROLL_SPEED_PX_PER_MS),
+      dx: plan.dx,
+      dy: plan.dy,
+      sentDx: 0,
+      sentDy: 0,
+      fromRotation: rollRotation,
+      toRotation: rollRotation + plan.rotationSign * plan.turns * 360
+    };
+    nextRollTargetAt = Number.POSITIVE_INFINITY;
+  } finally {
+    isPickingRoll = false;
+  }
 }
 
 function easeInOutCubic(t) {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
+function syncRollStyles() {
+  petContainer?.style.setProperty('--roll-x', '0px');
+  petRoller?.style.setProperty('--roll-rotation', `${rollRotation.toFixed(2)}deg`);
+}
+
+function stopRollAtCurrentPosition() {
+  activeRoll = null;
+  syncRollStyles();
 }
 
 function animateLocalRoll(now) {
@@ -64,8 +147,10 @@ function animateLocalRoll(now) {
 
   lastRollFrameAt = now;
 
-  const shouldPause = isPointerNearPet || isDragging || expressionLocked;
-  if (shouldPause && !activeRoll) {
+  const isBubbleVisible = bubble?.classList.contains('bubble-visible');
+  const shouldPause = isPointerNearPet || isDragging || expressionLocked || isBubbleVisible;
+  if (shouldPause) {
+    stopRollAtCurrentPosition();
     nextRollTargetAt = now + 1200;
   } else if (!shouldPause && !activeRoll && now >= nextRollTargetAt) {
     pickRollTarget(now);
@@ -74,19 +159,27 @@ function animateLocalRoll(now) {
   if (activeRoll) {
     const progress = Math.min(1, (now - activeRoll.startAt) / activeRoll.duration);
     const eased = easeInOutCubic(progress);
-    rollX = activeRoll.fromX + (activeRoll.toX - activeRoll.fromX) * eased;
+    const sentDx = Math.round(activeRoll.dx * eased);
+    const sentDy = Math.round(activeRoll.dy * eased);
+    const frameDx = sentDx - activeRoll.sentDx;
+    const frameDy = sentDy - activeRoll.sentDy;
+
+    if (frameDx !== 0 || frameDy !== 0) {
+      window.petAPI?.moveWindow(frameDx, frameDy);
+      activeRoll.sentDx = sentDx;
+      activeRoll.sentDy = sentDy;
+    }
+
     rollRotation = activeRoll.fromRotation + (activeRoll.toRotation - activeRoll.fromRotation) * eased;
 
     if (progress >= 1) {
-      rollX = activeRoll.toX;
       rollRotation = activeRoll.toRotation;
       activeRoll = null;
       nextRollTargetAt = now + 2600 + Math.random() * 3600;
     }
   }
 
-  petContainer?.style.setProperty('--roll-x', `${rollX.toFixed(2)}px`);
-  petRoller?.style.setProperty('--roll-rotation', `${rollRotation.toFixed(2)}deg`);
+  syncRollStyles();
   requestAnimationFrame(animateLocalRoll);
 }
 
@@ -136,7 +229,6 @@ function updateLookAtMouse(e) {
   petBody.style.setProperty('--look-x', `${lookX.toFixed(2)}px`);
   petBody.style.setProperty('--look-y', `${lookY.toFixed(2)}px`);
   isPointerNearPet = distance < ROLL_STOP_DISTANCE;
-  if (isPointerNearPet) rollTargetX = rollX;
 
   if (isDragging || expressionLocked) return;
   if (distance < 70) {
@@ -209,6 +301,8 @@ function showBubble(text, duration = 8000) {
   if (!bubbleEnabled) return;
   if (bubbleTimer) clearTimeout(bubbleTimer);
 
+  stopRollAtCurrentPosition();
+  petContainer?.style.setProperty('--bubble-x', '0px');
   bubbleText.textContent = text;
   bubble.classList.remove('bubble-hidden');
   bubble.classList.add('bubble-visible', 'pop-in');
