@@ -4,6 +4,19 @@ const moodLabel = document.getElementById('mood-label');
 const moodReason = document.getElementById('mood-last-reason');
 const moodButtons = document.querySelectorAll('.mood-btn');
 const autoBtn = document.getElementById('btn-auto');
+const personaSelect = document.getElementById('persona-select');
+const personaDesc = document.getElementById('persona-desc');
+const personaEditor = document.getElementById('persona-editor');
+const personaName = document.getElementById('persona-name');
+const personaDescription = document.getElementById('persona-description');
+const personaPrompt = document.getElementById('persona-prompt');
+const personaError = document.getElementById('persona-editor-error');
+const newPersonaBtn = document.getElementById('btn-new-persona');
+const editPersonaBtn = document.getElementById('btn-edit-persona');
+const resetPersonaBtn = document.getElementById('btn-reset-persona');
+const savePersonaBtn = document.getElementById('btn-save-persona');
+const cancelPersonaBtn = document.getElementById('btn-cancel-persona');
+const deletePersonaBtn = document.getElementById('btn-delete-persona');
 const chatHistory = document.getElementById('chat-history');
 const memorySummary = document.getElementById('memory-summary');
 const clearMemoryBtn = document.getElementById('btn-clear-memory');
@@ -26,6 +39,58 @@ const EVENT_LABELS = {
   user_scolds: '用户吐槽',
   manual: '手动切换'
 };
+
+let personas = [];
+let currentPersonaId = 'xiaoban';
+let editingPersonaId = null;
+
+function getCurrentPersona() {
+  return personas.find(persona => persona.id === currentPersonaId) || personas[0] || null;
+}
+
+function updatePersonaDisplay(state = {}) {
+  personas = Array.isArray(state.personas) ? state.personas : personas;
+  currentPersonaId = state.currentPersonaId || currentPersonaId;
+
+  personaSelect.innerHTML = personas.map(persona =>
+    `<option value="${escapeHtml(persona.id)}">${escapeHtml(persona.name)}${persona.type === 'custom' ? '（自定义）' : ''}</option>`
+  ).join('');
+  personaSelect.value = currentPersonaId;
+
+  const current = getCurrentPersona();
+  personaDesc.textContent = current?.description || '';
+  editPersonaBtn.disabled = !current?.editable;
+  deletePersonaBtn.classList.toggle('hidden', !current?.editable);
+}
+
+function openPersonaEditor(persona = null) {
+  editingPersonaId = persona?.editable ? persona.id : null;
+  personaName.value = persona?.editable ? persona.name : '';
+  personaDescription.value = persona?.editable ? persona.description || '' : '';
+  personaPrompt.value = persona?.editable ? persona.systemPrompt || '' : '';
+  personaError.textContent = '';
+  deletePersonaBtn.classList.toggle('hidden', !editingPersonaId);
+  personaEditor.classList.remove('hidden');
+  personaName.focus();
+}
+
+function closePersonaEditor() {
+  editingPersonaId = null;
+  personaError.textContent = '';
+  personaEditor.classList.add('hidden');
+}
+
+function applyPersonaState(state = {}) {
+  updatePersonaDisplay(state);
+  if (state.mood) {
+    updateMoodDisplay(state.mood, state.moodReason);
+  }
+  clearChatHistoryDisplay();
+  if (state.recentMessages?.length) {
+    state.recentMessages.forEach(m => addChatEntry(m.role, m.content));
+  }
+  updateMemoryDisplay(state);
+}
 
 // --- Update mood display ---
 function updateMoodDisplay(mood, reason) {
@@ -92,15 +157,19 @@ if (window.controlAPI) {
     updateMoodDisplay(mood, reason);
   });
 
+  window.controlAPI.onPersonaChanged((state) => {
+    applyPersonaState(state);
+    closePersonaEditor();
+  });
+
   window.controlAPI.onChatMessage(({ role, content }) => {
     addChatEntry(role, content);
   });
 
   // Load initial state
   window.controlAPI.getState().then(state => {
-    if (state.mood) {
-      updateMoodDisplay(state.mood, state.moodReason);
-    }
+    updatePersonaDisplay(state);
+    if (state.mood) updateMoodDisplay(state.mood, state.moodReason);
     if (state.recentMessages) {
       state.recentMessages.forEach(m => addChatEntry(m.role, m.content));
     }
@@ -118,6 +187,67 @@ moodButtons.forEach(btn => {
   });
 });
 
+personaSelect.addEventListener('change', async () => {
+  const state = await window.controlAPI?.setPersona(personaSelect.value);
+  if (state) applyPersonaState(state);
+});
+
+newPersonaBtn.addEventListener('click', () => {
+  openPersonaEditor();
+});
+
+editPersonaBtn.addEventListener('click', () => {
+  const current = getCurrentPersona();
+  if (current?.editable) openPersonaEditor(current);
+});
+
+resetPersonaBtn.addEventListener('click', () => {
+  window.controlAPI?.setPersona('xiaoban').then(state => {
+    if (state) applyPersonaState(state);
+  });
+});
+
+cancelPersonaBtn.addEventListener('click', () => {
+  closePersonaEditor();
+});
+
+savePersonaBtn.addEventListener('click', async () => {
+  const payload = {
+    id: editingPersonaId,
+    name: personaName.value.trim(),
+    description: personaDescription.value.trim(),
+    systemPrompt: personaPrompt.value.trim()
+  };
+  if (!payload.name || !payload.systemPrompt) {
+    personaError.textContent = '人格名称和提示词不能为空';
+    return;
+  }
+  savePersonaBtn.disabled = true;
+  try {
+    const state = await window.controlAPI.saveCustomPersona(payload);
+    applyPersonaState(state);
+    closePersonaEditor();
+  } catch (err) {
+    personaError.textContent = err?.message || '保存失败';
+  } finally {
+    savePersonaBtn.disabled = false;
+  }
+});
+
+deletePersonaBtn.addEventListener('click', async () => {
+  if (!editingPersonaId) return;
+  deletePersonaBtn.disabled = true;
+  try {
+    const state = await window.controlAPI.deleteCustomPersona(editingPersonaId);
+    applyPersonaState(state);
+    closePersonaEditor();
+  } catch (err) {
+    personaError.textContent = err?.message || '删除失败';
+  } finally {
+    deletePersonaBtn.disabled = false;
+  }
+});
+
 autoBtn.addEventListener('click', () => {
   window.controlAPI?.resetMood();
   moodButtons.forEach(b => b.classList.remove('active'));
@@ -128,8 +258,7 @@ clearMemoryBtn.addEventListener('click', async () => {
   clearMemoryBtn.disabled = true;
   try {
     const state = await window.controlAPI.clearMemory();
-    clearChatHistoryDisplay();
-    updateMemoryDisplay(state);
+    applyPersonaState(state);
   } finally {
     clearMemoryBtn.disabled = false;
   }

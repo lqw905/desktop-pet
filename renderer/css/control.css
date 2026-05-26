@@ -67,6 +67,112 @@ body {
   margin-bottom: 8px;
 }
 
+/* ===== Persona ===== */
+#persona-select,
+#persona-name,
+#persona-description,
+#persona-prompt {
+  width: 100%;
+  border: 1px solid #444;
+  border-radius: 6px;
+  background: #1a1a2e;
+  color: #e0e0e0;
+  font-size: 12px;
+  font-family: inherit;
+  outline: none;
+}
+
+#persona-select,
+#persona-name,
+#persona-description {
+  padding: 8px 10px;
+}
+
+#persona-select:focus,
+#persona-name:focus,
+#persona-description:focus,
+#persona-prompt:focus {
+  border-color: #FFB74D;
+}
+
+#persona-desc {
+  color: #999;
+  font-size: 11px;
+  line-height: 1.45;
+  min-height: 30px;
+  margin-top: 8px;
+}
+
+#persona-actions,
+#persona-editor-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+#persona-editor {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#persona-editor.hidden {
+  display: none;
+}
+
+#persona-prompt {
+  min-height: 120px;
+  resize: vertical;
+  padding: 9px 10px;
+  line-height: 1.5;
+}
+
+.primary-btn,
+.secondary-btn,
+.danger-btn {
+  flex: 1;
+  padding: 7px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.primary-btn {
+  border: 1px solid #FFB74D;
+  background: #FFB74D;
+  color: #1a1a2e;
+  font-weight: 600;
+}
+
+.secondary-btn {
+  border: 1px solid #444;
+  background: #1a1a2e;
+  color: #ccc;
+}
+
+.secondary-btn:hover {
+  border-color: #FFB74D;
+  color: #FFB74D;
+}
+
+.danger-btn {
+  border: 1px solid #73434a;
+  background: #25151c;
+  color: #ff9aa8;
+}
+
+.danger-btn.hidden {
+  display: none;
+}
+
+#persona-editor-error {
+  min-height: 16px;
+  color: #ff9aa8;
+  font-size: 11px;
+}
+
 /* ===== Mood Display ===== */
 #mood-display {
   display: flex;

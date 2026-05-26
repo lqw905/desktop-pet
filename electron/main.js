@@ -34,9 +34,9 @@ function initBackend() {
 
   mood = require('./mood');
   mood.initMood();
-  mood.onMoodChange(({ mood: newMood, reason }) => {
+  mood.onMoodChange(({ mood: newMood, reason, personaId }) => {
     if (controlWindow && !controlWindow.isDestroyed()) {
-      controlWindow.webContents.send('mood-changed', { mood: newMood, reason });
+      controlWindow.webContents.send('mood-changed', { mood: newMood, reason, personaId });
     }
   });
 
@@ -131,7 +131,7 @@ app.whenReady().then(async () => {
   // Greet the user after a short delay
   setTimeout(() => {
     if (petWindow && !petWindow.isDestroyed()) {
-      petWindow.webContents.send('show-bubble', '你好！我是小伴，你的桌面伙伴~');
+      petWindow.webContents.send('show-bubble', `你好，我是${memory.getCurrentPersona().name}。`);
     }
   }, 1000);
 
@@ -250,12 +250,15 @@ app.whenReady().then(async () => {
     }
   });
 
-  ipcMain.handle('get-state', () => {
+  function buildControlState() {
     const recentMessages = memory.getRecentConversations(20).map(m => ({
       role: m.role,
       content: m.content
     }));
     return {
+      currentPersonaId: memory.getCurrentPersonaId(),
+      currentPersona: memory.getCurrentPersona(),
+      personas: memory.getAllPersonas(),
       mood: mood.getCurrentMood(),
       moodReason: memory.getLastMoodReason(),
       recentMessages,
@@ -265,12 +268,56 @@ app.whenReady().then(async () => {
       memoryItems: memory.getMemoryItems(8),
       memoryStats: memory.getMemoryStats()
     };
+  }
+
+  function notifyPersonaState() {
+    const state = buildControlState();
+    if (petWindow && !petWindow.isDestroyed()) {
+      petWindow.webContents.send('update-mood', state.mood);
+    }
+    if (chatWindow && !chatWindow.isDestroyed()) {
+      chatWindow.webContents.send('persona-changed', {
+        currentPersonaId: state.currentPersonaId,
+        currentPersona: state.currentPersona
+      });
+    }
+    if (controlWindow && !controlWindow.isDestroyed()) {
+      controlWindow.webContents.send('persona-changed', state);
+    }
+    return state;
+  }
+
+  ipcMain.handle('set-persona', (_event, personaId) => {
+    mood.switchPersona(personaId);
+    return notifyPersonaState();
+  });
+
+  ipcMain.handle('save-custom-persona', (_event, persona) => {
+    const saved = memory.saveCustomPersona(persona);
+    mood.switchPersona(saved.id);
+    return notifyPersonaState();
+  });
+
+  ipcMain.handle('delete-custom-persona', (_event, personaId) => {
+    memory.deleteCustomPersona(personaId);
+    mood.switchPersona(memory.getCurrentPersonaId());
+    return notifyPersonaState();
+  });
+
+  ipcMain.handle('get-state', () => {
+    return buildControlState();
   });
 
   ipcMain.handle('clear-memory', () => {
     memory.clearMemory();
+    mood.initMood();
     return {
       ok: true,
+      currentPersonaId: memory.getCurrentPersonaId(),
+      currentPersona: memory.getCurrentPersona(),
+      personas: memory.getAllPersonas(),
+      mood: mood.getCurrentMood(),
+      moodReason: memory.getLastMoodReason(),
       memorySettings: memory.getMemorySettings(),
       memorySummary: memory.getMemorySummary(),
       profile: memory.getProfile(),

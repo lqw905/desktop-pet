@@ -51,6 +51,14 @@ jest.mock('../electron/memory', () => ({
     allowHighSensitivityMemory: false
   })),
   getMemorySummary: jest.fn(() => ''),
+  getCurrentPersonaId: jest.fn(() => 'xiaoban'),
+  getCurrentPersona: jest.fn(() => ({
+    id: 'xiaoban',
+    name: '小伴',
+    systemPrompt: '小伴人格',
+    moodPrompt: '心情规则',
+    replyRules: '回复规则'
+  })),
   getProfile: jest.fn(() => ({ userName: '', preferences: [] })),
   shouldReviewMemory: jest.fn(() => false),
   getMessagesForMemoryReview: jest.fn(() => []),
@@ -67,7 +75,8 @@ const {
   extractJson, formatError, detectSentimentFast,
   hasMemorySignal, getRandomGreeting, QUICK_GREETINGS,
   SENTIMENT_KEYWORDS, setMuted, setBubbleEnabled,
-  getLastError, onChatMessage, startScheduler, stopScheduler
+  getLastError, onChatMessage, startScheduler, stopScheduler,
+  cleanPetReply
 } = require('../electron/scheduler');
 
 // ==================== extractJson ====================
@@ -422,6 +431,22 @@ describe('setMuted / setBubbleEnabled', () => {
 describe('getLastError', () => {
   test('初始状态为 null', () => {
     expect(getLastError()).toBeNull();
+  });
+});
+
+// ==================== cleanPetReply ====================
+
+describe('cleanPetReply', () => {
+  test('小伴保留活泼称呼和拟声词，只清理 HTML 标签', () => {
+    expect(cleanPetReply('呜，主人！我来啦<br><b>试试</b>', {
+      preserveExpressiveStyle: true
+    })).toBe('呜，主人！我来啦\n试试');
+  });
+
+  test('非小伴人格清理旧称呼和拟声词', () => {
+    expect(cleanPetReply('呜，主人！我来啦<br><b>试试</b>', {
+      preserveExpressiveStyle: false
+    })).toBe('我来啦\n试试');
   });
 });
 

@@ -1,52 +1,71 @@
-const { saveMood, getLastMood } = require('./memory');
+const { saveMood, getLastMood, getCurrentPersonaId, setCurrentPersonaId } = require('./memory');
 
 const MOODS = ['happy', 'excited', 'bored', 'sleepy', 'caring'];
 
-let currentMood = 'happy';
+let currentMoodByPersona = {};
 let onChangeCallback = null;
-let preManualMood = null;
+let preManualMoodByPersona = {};
+
+function getStoredMood(personaId = getCurrentPersonaId()) {
+  return currentMoodByPersona[personaId] || 'happy';
+}
 
 function onMoodChange(cb) {
   onChangeCallback = cb;
 }
 
 function setMood(mood) {
+  const personaId = getCurrentPersonaId();
+  const currentMood = getStoredMood(personaId);
   if (!MOODS.includes(mood)) return currentMood;
-  if (preManualMood === null) preManualMood = currentMood;
+  if (preManualMoodByPersona[personaId] === undefined) preManualMoodByPersona[personaId] = currentMood;
   const oldMood = currentMood;
-  currentMood = mood;
-  saveMood(currentMood, 'manual');
+  currentMoodByPersona[personaId] = mood;
+  saveMood(mood, 'manual', personaId);
   if (onChangeCallback) {
-    onChangeCallback({ mood: currentMood, reason: 'manual', oldMood });
+    onChangeCallback({ mood, reason: 'manual', oldMood, personaId });
   }
-  return currentMood;
+  return mood;
 }
 
 function resetMood() {
-  if (preManualMood !== null) {
-    currentMood = preManualMood;
-    preManualMood = null;
-    saveMood(currentMood, 'reset_auto');
+  const personaId = getCurrentPersonaId();
+  if (preManualMoodByPersona[personaId] !== undefined) {
+    currentMoodByPersona[personaId] = preManualMoodByPersona[personaId];
+    delete preManualMoodByPersona[personaId];
+    saveMood(currentMoodByPersona[personaId], 'reset_auto', personaId);
     if (onChangeCallback) {
-      onChangeCallback({ mood: currentMood, reason: 'reset_auto' });
+      onChangeCallback({ mood: currentMoodByPersona[personaId], reason: 'reset_auto', personaId });
     }
   }
-  return currentMood;
+  return getStoredMood(personaId);
 }
 
 function initMood() {
-  currentMood = getLastMood();
-  return currentMood;
+  const personaId = getCurrentPersonaId();
+  currentMoodByPersona[personaId] = getLastMood();
+  return currentMoodByPersona[personaId];
+}
+
+function switchPersona(personaId) {
+  const activePersonaId = setCurrentPersonaId(personaId);
+  currentMoodByPersona[activePersonaId] = getLastMood();
+  return {
+    personaId: activePersonaId,
+    mood: currentMoodByPersona[activePersonaId]
+  };
 }
 
 function getCurrentMood() {
-  return currentMood;
+  return getStoredMood();
 }
 
 /**
  * Transition mood based on trigger events
  */
 function triggerEvent(event) {
+  const personaId = getCurrentPersonaId();
+  let currentMood = getStoredMood(personaId);
   const oldMood = currentMood;
   const r = Math.random();
 
@@ -130,13 +149,14 @@ function triggerEvent(event) {
 
   // Any system event clears the manual override backup
   if (event !== 'manual' && event !== 'reset_auto') {
-    preManualMood = null;
+    delete preManualMoodByPersona[personaId];
   }
 
   if (currentMood !== oldMood) {
-    saveMood(currentMood, event);
+    currentMoodByPersona[personaId] = currentMood;
+    saveMood(currentMood, event, personaId);
     if (onChangeCallback) {
-      onChangeCallback({ mood: currentMood, reason: event, oldMood });
+      onChangeCallback({ mood: currentMood, reason: event, oldMood, personaId });
     }
   }
 
@@ -147,6 +167,7 @@ function triggerEvent(event) {
  * Get the proactive interval range in minutes based on mood
  */
 function getProactiveInterval() {
+  const currentMood = getCurrentMood();
   switch (currentMood) {
     case 'excited': return { min: 1, max: 2 };
     case 'bored':   return { min: 1, max: 2 };
@@ -157,4 +178,4 @@ function getProactiveInterval() {
   }
 }
 
-module.exports = { initMood, getCurrentMood, triggerEvent, setMood, resetMood, onMoodChange, MOODS, getProactiveInterval };
+module.exports = { initMood, switchPersona, getCurrentMood, triggerEvent, setMood, resetMood, onMoodChange, MOODS, getProactiveInterval };

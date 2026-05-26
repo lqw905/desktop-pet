@@ -6,7 +6,8 @@ const {
   saveMessage, getRecentConversations, getTodayMessageCount,
   getLastPetMessageTime, getMemorySettings, getMemorySummary,
   getProfile, shouldReviewMemory, getMessagesForMemoryReview,
-  markMemoryReviewed, applyMemoryReview, getMemoryContextItems
+  markMemoryReviewed, applyMemoryReview, getMemoryContextItems,
+  getCurrentPersonaId, getCurrentPersona
 } = require('./memory');
 const { getPetWindow } = require('./window');
 
@@ -56,6 +57,22 @@ function formatError(err) {
   return `出错了：${msg}`;
 }
 
+function cleanPetReply(text, persona = getCurrentPersona()) {
+  let cleaned = String(text || '')
+    .replace(/<\s*br\s*\/?\s*>/gi, '\n')
+    .replace(/<\/?[^>]+>/g, '')
+    .replace(/\n{3,}/g, '\n\n');
+
+  if (!persona?.preserveExpressiveStyle) {
+    cleaned = cleaned
+      .replace(/^\s*(呜+|哇+|呀+)[，,、\s]*/g, '')
+      .replace(/^\s*主人[，,！!。.\s]*/g, '')
+      .replace(/主人/g, '你');
+  }
+
+  return cleaned.trim();
+}
+
 async function generateReply(userMessage) {
   markUserActive();
   const fastSentiment = detectSentimentFast(userMessage);
@@ -68,6 +85,8 @@ async function generateReply(userMessage) {
   const conversations = getRecentConversations(settings.chatContextMessages);
   const windowContext = getActiveWindowContext();
   const context = {
+    personaId: getCurrentPersonaId(),
+    persona: getCurrentPersona(),
     time: new Date().toLocaleString('zh-CN'),
     ...windowContext,
     memorySummary: getMemorySummary(),
@@ -97,6 +116,7 @@ async function generateReply(userMessage) {
     return lastErrorMsg;
   }
 
+  reply = cleanPetReply(reply, context.persona);
   lastErrorMsg = null;
   saveMessage('pet', reply);
   broadcastMessage('pet', reply);
@@ -126,6 +146,8 @@ async function generateReplyStreaming(userMessage, chatWindow) {
   const conversations = getRecentConversations(settings.chatContextMessages);
   const windowContext = getActiveWindowContext();
   const context = {
+    personaId: getCurrentPersonaId(),
+    persona: getCurrentPersona(),
     time: new Date().toLocaleString('zh-CN'),
     ...windowContext,
     memorySummary: getMemorySummary(),
@@ -142,7 +164,7 @@ async function generateReplyStreaming(userMessage, chatWindow) {
       reply = await callDeepseekStream(prompt, { temperature: 0.8, maxTokens: 150 },
         (_token, fullText) => {
           if (chatWindow && !chatWindow.isDestroyed()) {
-            chatWindow.webContents.send('chat-token', fullText);
+            chatWindow.webContents.send('chat-token', cleanPetReply(fullText, context.persona));
           }
         }
       );
@@ -161,6 +183,7 @@ async function generateReplyStreaming(userMessage, chatWindow) {
     return lastErrorMsg;
   }
 
+  reply = cleanPetReply(reply, context.persona);
   lastErrorMsg = null;
   saveMessage('pet', reply);
   broadcastMessage('pet', reply);
@@ -248,6 +271,8 @@ async function proactiveCheck() {
 
   try {
     const context = buildContext({
+      personaId: getCurrentPersonaId(),
+      persona: getCurrentPersona(),
       todayMessageCount: getTodayMessageCount(),
       recentConversations: formatRecentConvForSentry(),
       minutesSinceLastSpeak: getMinutesSinceLastSpeak(),
@@ -279,6 +304,7 @@ async function proactiveCheck() {
 async function showProactiveMessage(text) {
   const petWindow = getPetWindow();
   if (!petWindow || petWindow.isDestroyed()) return;
+  text = cleanPetReply(text);
 
   saveMessage('pet', text);
   broadcastMessage('pet', text);
@@ -321,6 +347,8 @@ async function triggerProactiveMessage() {
   showBubbleOnly(quickGreeting);
 
   const context = buildContext({
+    personaId: getCurrentPersonaId(),
+    persona: getCurrentPersona(),
     todayMessageCount: getTodayMessageCount(),
     recentConversations: formatRecentConvForSentry(),
     minutesSinceLastSpeak: getMinutesSinceLastSpeak(),
@@ -558,6 +586,6 @@ module.exports = {
   triggerProactiveMessage, generateReply, generateReplyStreaming,
   scheduleNextCheck, getLastError, onChatMessage,
   // 导出用于测试
-  extractJson, formatError, detectSentimentFast, hasMemorySignal,
+  extractJson, formatError, cleanPetReply, detectSentimentFast, hasMemorySignal,
   getRandomGreeting, QUICK_GREETINGS, SENTIMENT_KEYWORDS
 };

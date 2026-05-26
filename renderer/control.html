@@ -11,6 +11,29 @@
     <!-- Header -->
     <div id="control-header">桌宠控制台</div>
 
+    <!-- Persona Panel -->
+    <div class="panel">
+      <div class="panel-title">当前人格</div>
+      <select id="persona-select"></select>
+      <div id="persona-desc"></div>
+      <div id="persona-actions">
+        <button class="secondary-btn" id="btn-new-persona" type="button">新建人格</button>
+        <button class="secondary-btn" id="btn-edit-persona" type="button">编辑当前</button>
+        <button class="secondary-btn" id="btn-reset-persona" type="button">恢复默认</button>
+      </div>
+      <div id="persona-editor" class="hidden">
+        <input id="persona-name" type="text" maxlength="40" placeholder="人格名称">
+        <input id="persona-description" type="text" maxlength="160" placeholder="描述，例如：适合写代码和排错">
+        <textarea id="persona-prompt" maxlength="4000" placeholder="输入人格提示词，例如：你是一个冷静、直接、擅长排错的桌面伙伴……"></textarea>
+        <div id="persona-editor-actions">
+          <button class="primary-btn" id="btn-save-persona" type="button">保存</button>
+          <button class="secondary-btn" id="btn-cancel-persona" type="button">取消</button>
+          <button class="danger-btn" id="btn-delete-persona" type="button">删除</button>
+        </div>
+        <div id="persona-editor-error"></div>
+      </div>
+    </div>
+
     <!-- Mood Panel -->
     <div class="panel">
       <div class="panel-title">当前心情</div>

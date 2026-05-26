@@ -117,6 +117,32 @@ describe('buildChatPrompt', () => {
     expect(prompt).toContain('小伴');
   });
 
+  test('小伴允许主人、撒娇和颜文字风格', () => {
+    const prompt = buildChatPrompt(conversations, 'happy', context);
+    expect(prompt).toContain('主人');
+    expect(prompt).toContain('呜呜');
+    expect(prompt).toContain('颜文字');
+    expect(prompt).toContain('当前人格允许使用');
+  });
+
+  test('支持自定义人格提示词', () => {
+    const prompt = buildChatPrompt(conversations, 'happy', {
+      ...context,
+      persona: {
+        id: 'custom_test',
+        name: '冷静助理',
+        systemPrompt: '你是一个冷静直接的助手',
+        moodPrompt: '心情只轻微影响语气',
+        replyRules: '回答要短',
+        preserveExpressiveStyle: false
+      }
+    });
+    expect(prompt).toContain('冷静助理');
+    expect(prompt).toContain('你是一个冷静直接的助手');
+    expect(prompt).toContain('回答要短');
+    expect(prompt).toContain('不要使用“主人”');
+  });
+
   test('包含心情映射', () => {
     const mappings = [
       ['happy', '开心'],

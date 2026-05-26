@@ -11,6 +11,8 @@ contextBridge.exposeInMainWorld('petAPI', {
   onChatResponse: (callback) => ipcRenderer.on('chat-response', (_event, text) => callback(text)),
   onChatToken: (callback) => ipcRenderer.on('chat-token', (_event, text) => callback(text)),
   onChatResponseEnd: (callback) => ipcRenderer.on('chat-response-end', (_event, text) => callback(text)),
+  onPersonaChanged: (callback) => ipcRenderer.on('persona-changed', (_event, data) => callback(data)),
+  getState: () => ipcRenderer.invoke('get-state'),
 
   // Status check
   checkStatus: () => ipcRenderer.invoke('check-status'),
@@ -30,9 +32,13 @@ contextBridge.exposeInMainWorld('petAPI', {
 
 contextBridge.exposeInMainWorld('controlAPI', {
   onMoodChanged: (callback) => ipcRenderer.on('mood-changed', (_event, data) => callback(data)),
+  onPersonaChanged: (callback) => ipcRenderer.on('persona-changed', (_event, data) => callback(data)),
   onChatMessage: (callback) => ipcRenderer.on('chat-message', (_event, data) => callback(data)),
   getState: () => ipcRenderer.invoke('get-state'),
   clearMemory: () => ipcRenderer.invoke('clear-memory'),
+  setPersona: (personaId) => ipcRenderer.invoke('set-persona', personaId),
+  saveCustomPersona: (persona) => ipcRenderer.invoke('save-custom-persona', persona),
+  deleteCustomPersona: (personaId) => ipcRenderer.invoke('delete-custom-persona', personaId),
   setMood: (mood) => ipcRenderer.send('set-mood', mood),
   resetMood: () => ipcRenderer.send('reset-mood'),
   removeAllListeners: (channel) => ipcRenderer.removeAllListeners(channel)

@@ -19,6 +19,8 @@ jest.mock('fs', () => ({
 
 const {
   initDatabase, saveData, closeDatabase, clearMemory,
+  getCurrentPersonaId, setCurrentPersonaId,
+  getAllPersonas, getCurrentPersona, saveCustomPersona, deleteCustomPersona,
   saveMessage, getRecentConversations, getTodayMessageCount,
   getLastPetMessageTime, setMemory, getMemory,
   saveMood, getLastMood, getLastMoodReason,
@@ -86,6 +88,66 @@ describe('initDatabase', () => {
   });
 });
 
+// ==================== 人格状态 ====================
+
+describe('persona state', () => {
+  test('默认人格为小伴', () => {
+    clearMemory();
+    expect(getCurrentPersonaId()).toBe('xiaoban');
+    expect(getCurrentPersona().name).toBe('小伴');
+  });
+
+  test('可以创建并切换自定义人格', () => {
+    clearMemory();
+    const persona = saveCustomPersona({
+      name: '冷静助理',
+      description: '适合排错',
+      systemPrompt: '你是一个冷静直接的助手'
+    });
+    expect(persona.id).toMatch(/^custom_/);
+    expect(persona.editable).toBe(true);
+    expect(getCurrentPersonaId()).toBe(persona.id);
+    expect(getAllPersonas().some(item => item.id === persona.id)).toBe(true);
+  });
+
+  test('可以更新自定义人格', () => {
+    clearMemory();
+    const persona = saveCustomPersona({
+      name: '旧名字',
+      systemPrompt: '旧提示词'
+    });
+    const updated = saveCustomPersona({
+      id: persona.id,
+      name: '新名字',
+      description: '新描述',
+      systemPrompt: '新提示词'
+    });
+    expect(updated.id).toBe(persona.id);
+    expect(updated.name).toBe('新名字');
+    expect(getCurrentPersona().name).toBe('新名字');
+  });
+
+  test('删除当前自定义人格后回到小伴', () => {
+    clearMemory();
+    const persona = saveCustomPersona({ name: '临时人格', systemPrompt: '临时提示词' });
+    const result = deleteCustomPersona(persona.id);
+    expect(result.ok).toBe(true);
+    expect(getCurrentPersonaId()).toBe('xiaoban');
+  });
+
+  test('不能删除内置人格', () => {
+    clearMemory();
+    const result = deleteCustomPersona('xiaoban');
+    expect(result.ok).toBe(false);
+    expect(getCurrentPersonaId()).toBe('xiaoban');
+  });
+
+  test('无效人格会回到默认人格', () => {
+    clearMemory();
+    expect(setCurrentPersonaId('missing')).toBe('xiaoban');
+  });
+});
+
 // ==================== 消息管理 ====================
 
 describe('saveMessage / getRecentConversations', () => {
@@ -124,6 +186,18 @@ describe('saveMessage / getRecentConversations', () => {
     const recent = getRecentConversations(5);
     expect(recent).toHaveLength(5);
     expect(recent[4].content).toBe('msg19');
+  });
+
+  test('不同人格的最近对话互不影响', () => {
+    clearMemory();
+    saveMessage('user', '小伴消息');
+    const persona = saveCustomPersona({ name: '自定义', systemPrompt: '自定义提示词' });
+    saveMessage('user', '自定义消息');
+    expect(getRecentConversations(10).map(m => m.content)).toEqual(['自定义消息']);
+    setCurrentPersonaId('xiaoban');
+    expect(getRecentConversations(10).map(m => m.content)).toEqual(['小伴消息']);
+    setCurrentPersonaId(persona.id);
+    expect(getRecentConversations(10).map(m => m.content)).toEqual(['自定义消息']);
   });
 });
 
@@ -176,6 +250,19 @@ describe('saveMood / getLastMood', () => {
   test('getLastMoodReason 无历史返回 null', () => {
     clearMemory();
     expect(getLastMoodReason()).toBeNull();
+  });
+
+  test('不同人格的心情历史互不影响', () => {
+    clearMemory();
+    saveMood('excited', 'manual');
+    const persona = saveCustomPersona({ name: '自定义', systemPrompt: '自定义提示词' });
+    expect(getLastMood()).toBe('happy');
+    saveMood('sleepy', 'late_night');
+    expect(getLastMood()).toBe('sleepy');
+    setCurrentPersonaId('xiaoban');
+    expect(getLastMood()).toBe('excited');
+    setCurrentPersonaId(persona.id);
+    expect(getLastMood()).toBe('sleepy');
   });
 });
 

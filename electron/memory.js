@@ -1,6 +1,14 @@
 const fs = require('fs');
 const path = require('path');
 const { app } = require('electron');
+const {
+  DEFAULT_PERSONA_ID,
+  getPersonas,
+  getPersona,
+  isBuiltinPersonaId,
+  normalizeCustomPersona,
+  toPublicPersona
+} = require('./personas');
 
 function getEnvBool(key, defaultValue) {
   const value = process.env[key];
@@ -32,7 +40,9 @@ function getDefaultSettings() {
 
 function createDefaultData() {
   return {
-    version: 3,
+    version: 4,
+    currentPersonaId: DEFAULT_PERSONA_ID,
+    customPersonas: [],
     settings: getDefaultSettings(),
     profile: {
       identity: {},
@@ -79,7 +89,9 @@ function initDatabase() {
       data = {
         ...createDefaultData(),
         ...parsed,
-        version: 3,
+        version: 4,
+        currentPersonaId: parsed.currentPersonaId || DEFAULT_PERSONA_ID,
+        customPersonas: Array.isArray(parsed.customPersonas) ? parsed.customPersonas : [],
         settings: currentSettings,
         profile: {
           ...createDefaultData().profile,
@@ -94,6 +106,18 @@ function initDatabase() {
       data.conversations = data.conversations || [];
       data.memories = data.memories || {};
       data.moodHistory = data.moodHistory || [];
+      data.customPersonas = data.customPersonas
+        .map(persona => normalizeCustomPersona(persona, persona))
+        .filter(Boolean);
+      if (!getPersonas(data.customPersonas).some(persona => persona.id === data.currentPersonaId)) {
+        data.currentPersonaId = DEFAULT_PERSONA_ID;
+      }
+      data.conversations.forEach(message => {
+        if (!message.personaId) message.personaId = DEFAULT_PERSONA_ID;
+      });
+      data.moodHistory.forEach(entry => {
+        if (!entry.personaId) entry.personaId = DEFAULT_PERSONA_ID;
+      });
       data.memoryItems = data.memoryItems || [];
       data.memoryInbox = data.memoryInbox || [];
       data.audit = {
@@ -134,9 +158,68 @@ function saveData() {
 }
 
 // --- Conversations ---
-function saveMessage(role, content) {
+function getCurrentPersonaId() {
+  return getPersona(data.currentPersonaId, data.customPersonas).id;
+}
+
+function getAllPersonas() {
+  return getPersonas(data.customPersonas).map(toPublicPersona);
+}
+
+function getCurrentPersona() {
+  return getPersona(getCurrentPersonaId(), data.customPersonas);
+}
+
+function setCurrentPersonaId(personaId) {
+  const persona = getPersona(personaId, data.customPersonas);
+  data.currentPersonaId = persona.id;
+  saveData();
+  return data.currentPersonaId;
+}
+
+function saveCustomPersona(input = {}) {
+  const existing = input.id && !isBuiltinPersonaId(input.id)
+    ? data.customPersonas.find(persona => persona.id === input.id)
+    : null;
+  const persona = normalizeCustomPersona(input, existing);
+  if (!persona) {
+    throw new Error('人格名称和提示词不能为空');
+  }
+
+  if (existing) {
+    const index = data.customPersonas.findIndex(item => item.id === existing.id);
+    data.customPersonas[index] = persona;
+  } else {
+    data.customPersonas.push(persona);
+  }
+  data.currentPersonaId = persona.id;
+  saveData();
+  return toPublicPersona({
+    ...persona,
+    editable: true
+  });
+}
+
+function deleteCustomPersona(personaId) {
+  if (!personaId || isBuiltinPersonaId(personaId)) {
+    return { ok: false, currentPersonaId: getCurrentPersonaId() };
+  }
+  const before = data.customPersonas.length;
+  data.customPersonas = data.customPersonas.filter(persona => persona.id !== personaId);
+  if (data.currentPersonaId === personaId) {
+    data.currentPersonaId = DEFAULT_PERSONA_ID;
+  }
+  saveData();
+  return {
+    ok: data.customPersonas.length !== before,
+    currentPersonaId: getCurrentPersonaId()
+  };
+}
+
+function saveMessage(role, content, personaId = getCurrentPersonaId()) {
   const msg = {
     id: nextId++,
+    personaId,
     role,
     content,
     created_at: new Date().toISOString()
@@ -148,7 +231,8 @@ function saveMessage(role, content) {
 }
 
 function getRecentConversations(limit = 10) {
-  const all = data.conversations;
+  const personaId = getCurrentPersonaId();
+  const all = data.conversations.filter(message => (message.personaId || DEFAULT_PERSONA_ID) === personaId);
   return all.slice(-limit);
 }
 
@@ -397,11 +481,19 @@ function applyMemoryReview(review = {}, reviewedMessageId = null) {
 
 function getTodayMessageCount() {
   const today = new Date().toISOString().slice(0, 10);
-  return data.conversations.filter(c => c.created_at.startsWith(today)).length;
+  const personaId = getCurrentPersonaId();
+  return data.conversations.filter(c =>
+    c.created_at.startsWith(today) &&
+    (c.personaId || DEFAULT_PERSONA_ID) === personaId
+  ).length;
 }
 
 function getLastPetMessageTime() {
-  const petMsgs = data.conversations.filter(c => c.role === 'pet');
+  const personaId = getCurrentPersonaId();
+  const petMsgs = data.conversations.filter(c =>
+    c.role === 'pet' &&
+    (c.personaId || DEFAULT_PERSONA_ID) === personaId
+  );
   if (petMsgs.length === 0) return null;
   return petMsgs[petMsgs.length - 1].created_at;
 }
@@ -421,9 +513,10 @@ function getMemory(key) {
 }
 
 // --- Mood History ---
-function saveMood(mood, reason = null) {
+function saveMood(mood, reason = null, personaId = getCurrentPersonaId()) {
   const entry = {
     id: data.moodHistory.length + 1,
+    personaId,
     mood,
     reason,
     created_at: new Date().toISOString()
@@ -434,13 +527,17 @@ function saveMood(mood, reason = null) {
 }
 
 function getLastMood() {
-  if (data.moodHistory.length === 0) return 'happy';
-  return data.moodHistory[data.moodHistory.length - 1].mood;
+  const personaId = getCurrentPersonaId();
+  const entries = data.moodHistory.filter(entry => (entry.personaId || DEFAULT_PERSONA_ID) === personaId);
+  if (entries.length === 0) return 'happy';
+  return entries[entries.length - 1].mood;
 }
 
 function getLastMoodReason() {
-  if (data.moodHistory.length === 0) return null;
-  return data.moodHistory[data.moodHistory.length - 1].reason;
+  const personaId = getCurrentPersonaId();
+  const entries = data.moodHistory.filter(entry => (entry.personaId || DEFAULT_PERSONA_ID) === personaId);
+  if (entries.length === 0) return null;
+  return entries[entries.length - 1].reason;
 }
 
 // --- Cleanup ---
@@ -452,6 +549,7 @@ function cleanOldConversations(keepCount = 500) {
 }
 
 function clearMemory() {
+  data.currentPersonaId = DEFAULT_PERSONA_ID;
   data.conversations = [];
   data.memories = {};
   data.moodHistory = [];
@@ -472,6 +570,8 @@ function closeDatabase() {
 
 module.exports = {
   initDatabase, saveData, closeDatabase,
+  getCurrentPersonaId, setCurrentPersonaId,
+  getAllPersonas, getCurrentPersona, saveCustomPersona, deleteCustomPersona,
   saveMessage, getRecentConversations, getTodayMessageCount, getLastPetMessageTime,
   setMemory, getMemory,
   saveMood, getLastMood, getLastMoodReason,

@@ -5,6 +5,7 @@ const TIMEOUT = 30000;
 // 从环境变量读取 API Key，也可直接替换字符串
 const API_KEY = process.env.AI_API_KEY || process.env.OPENROUTER_API_KEY || process.env.DEEPSEEK_API_KEY || '';
 const PROVIDER_NAME = process.env.AI_PROVIDER || (API_BASE.includes('openrouter.ai') ? 'OpenRouter' : 'DeepSeek');
+const SYSTEM_PROMPT = '你是桌面宠物应用中的当前人格助手。严格遵循用户消息中的人格、语气和回复规则，用中文回复。';
 
 function buildHeaders() {
   const headers = {
@@ -32,7 +33,7 @@ async function callDeepseek(prompt, options = {}) {
     const body = {
       model: MODEL,
       messages: [
-        { role: 'system', content: '你是一个可爱的桌面宠物，名字叫"小伴"。用中文回复，简短温暖。' },
+        { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: prompt }
       ],
       stream: false,
@@ -91,7 +92,7 @@ async function callDeepseekStream(prompt, options = {}, onToken) {
     const body = {
       model: MODEL,
       messages: [
-        { role: 'system', content: '你是一个可爱的桌面宠物，名字叫"小伴"。用中文回复，简短温暖。' },
+        { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: prompt }
       ],
       stream: true,

@@ -3,6 +3,7 @@ const messagesDiv = document.getElementById('chat-messages');
 const inputField = document.getElementById('chat-input');
 const sendBtn = document.getElementById('chat-send');
 const closeBtn = document.getElementById('chat-close');
+const chatTitle = document.getElementById('chat-title');
 
 let typingTimer = null;
 let streamingMsgDiv = null;
@@ -26,6 +27,16 @@ function addSystemMessage(text, isError = false) {
   messagesDiv.appendChild(msgDiv);
   messagesDiv.scrollTop = messagesDiv.scrollHeight;
   return msgDiv;
+}
+
+function updatePersonaHeader(persona) {
+  if (!persona) return;
+  chatTitle.textContent = `🐾 和 ${persona.name} 聊天`;
+}
+
+function clearMessagesWithPersona(persona) {
+  messagesDiv.innerHTML = '';
+  addSystemMessage(`已切换到「${persona.name}」，后续聊天会使用这个人格。`);
 }
 
 function showTyping() {
@@ -92,6 +103,22 @@ closeBtn.addEventListener('click', () => {
 
 // --- IPC Listeners ---
 if (window.petAPI) {
+  window.petAPI.getState?.().then(state => {
+    if (state?.currentPersona) {
+      updatePersonaHeader(state.currentPersona);
+    }
+  }).catch(() => {});
+
+  window.petAPI.onPersonaChanged?.(({ currentPersona }) => {
+    if (!currentPersona) return;
+    updatePersonaHeader(currentPersona);
+    streamingMsgDiv = null;
+    removeTyping();
+    inputField.disabled = false;
+    sendBtn.disabled = false;
+    clearMessagesWithPersona(currentPersona);
+  });
+
   window.petAPI.onChatToken((text) => {
     removeTyping();
     if (!text) return;

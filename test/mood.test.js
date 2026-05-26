@@ -5,19 +5,23 @@
 // Mock memory 模块（mood.js 依赖 saveMood / getLastMood）
 jest.mock('../electron/memory', () => ({
   saveMood: jest.fn(),
-  getLastMood: jest.fn(() => 'happy')
+  getLastMood: jest.fn(() => 'happy'),
+  getCurrentPersonaId: jest.fn(() => 'xiaoban'),
+  setCurrentPersonaId: jest.fn(id => id)
 }));
 
 const {
   initMood, getCurrentMood, triggerEvent, setMood,
-  resetMood, onMoodChange, MOODS, getProactiveInterval
+  resetMood, onMoodChange, MOODS, getProactiveInterval, switchPersona
 } = require('../electron/mood');
-const { saveMood, getLastMood } = require('../electron/memory');
+const { saveMood, getLastMood, getCurrentPersonaId, setCurrentPersonaId } = require('../electron/memory');
 
 beforeEach(() => {
   // 重置为 happy 状态
   jest.clearAllMocks();
   getLastMood.mockReturnValue('happy');
+  getCurrentPersonaId.mockReturnValue('xiaoban');
+  setCurrentPersonaId.mockImplementation(id => id);
   // 通过 resetMood 或 setMood 重置内部状态，这里直接用 initMood
 });
 
@@ -67,7 +71,7 @@ describe('setMood', () => {
     const result = setMood('excited');
     expect(result).toBe('excited');
     expect(getCurrentMood()).toBe('excited');
-    expect(saveMood).toHaveBeenCalledWith('excited', 'manual');
+    expect(saveMood).toHaveBeenCalledWith('excited', 'manual', 'xiaoban');
   });
 
   test('设置为无效心情保持原样', () => {
@@ -98,7 +102,7 @@ describe('resetMood', () => {
     setMood('bored');
     const result = resetMood();
     expect(result).toBe('happy');
-    expect(saveMood).toHaveBeenCalledWith('happy', 'reset_auto');
+    expect(saveMood).toHaveBeenCalledWith('happy', 'reset_auto', 'xiaoban');
   });
 
   test('连续 reset 两次，第二次无效', () => {
@@ -123,7 +127,8 @@ describe('onMoodChange', () => {
     expect(cb).toHaveBeenCalledWith({
       mood: 'sleepy',
       reason: 'late_night',
-      oldMood: 'happy'
+      oldMood: 'happy',
+      personaId: 'xiaoban'
     });
   });
 
@@ -135,7 +140,8 @@ describe('onMoodChange', () => {
     expect(cb).toHaveBeenCalledWith({
       mood: 'caring',
       reason: 'manual',
-      oldMood: 'happy'
+      oldMood: 'happy',
+      personaId: 'xiaoban'
     });
   });
 
@@ -417,7 +423,16 @@ describe('系统事件清除手动 override 状态', () => {
     triggerEvent('user_interaction'); // 系统事件
     // preManualMood 应被清除
     const result = resetMood(); // 不会再恢复
-    expect(saveMood).toHaveBeenCalledWith(getCurrentMood(), 'user_interaction');
+    expect(saveMood).toHaveBeenCalledWith(getCurrentMood(), 'user_interaction', 'xiaoban');
+  });
+});
+
+describe('switchPersona', () => {
+  test('切换人格时恢复该人格最后心情', () => {
+    getLastMood.mockReturnValue('sleepy');
+    const result = switchPersona('custom_1');
+    expect(setCurrentPersonaId).toHaveBeenCalledWith('custom_1');
+    expect(result).toEqual({ personaId: 'custom_1', mood: 'sleepy' });
   });
 });
 
