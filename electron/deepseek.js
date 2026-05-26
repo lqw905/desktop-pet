@@ -1,11 +1,36 @@
-const API_BASE = (process.env.AI_BASE_URL || process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com').replace(/\/$/, '');
-const MODEL = process.env.AI_MODEL || 'deepseek-chat';
+const DEFAULT_API_BASE = 'https://dashscope.aliyuncs.com/compatible-mode/v1';
+const API_BASE = (process.env.AI_BASE_URL || process.env.DEEPSEEK_BASE_URL || DEFAULT_API_BASE).replace(/\/$/, '');
+const MODEL = process.env.AI_MODEL || 'qwen-turbo';
 const TIMEOUT = 30000;
 
 // 从环境变量读取 API Key，也可直接替换字符串
-const API_KEY = process.env.AI_API_KEY || process.env.OPENROUTER_API_KEY || process.env.DEEPSEEK_API_KEY || '';
-const PROVIDER_NAME = process.env.AI_PROVIDER || (API_BASE.includes('openrouter.ai') ? 'OpenRouter' : 'DeepSeek');
+const API_KEY = process.env.AI_API_KEY || process.env.DASHSCOPE_API_KEY || process.env.OPENROUTER_API_KEY || process.env.DEEPSEEK_API_KEY || '';
+const PROVIDER_NAME = process.env.AI_PROVIDER || getProviderName(API_BASE);
 const SYSTEM_PROMPT = '你是桌面宠物应用中的当前人格助手。严格遵循用户消息中的人格、语气和回复规则，用中文回复。';
+
+function getProviderName(apiBase) {
+  if (apiBase.includes('openrouter.ai')) return 'OpenRouter';
+  if (apiBase.includes('dashscope.aliyuncs.com')) return '阿里百炼';
+  if (apiBase.includes('deepseek.com')) return 'DeepSeek';
+  return 'AI';
+}
+
+function buildApiUrl(pathname) {
+  const path = pathname.startsWith('/') ? pathname : `/${pathname}`;
+  if (API_BASE.endsWith('/v1')) return `${API_BASE}${path}`;
+  return `${API_BASE}/v1${path}`;
+}
+
+function shouldDisableThinking() {
+  return API_BASE.includes('dashscope.aliyuncs.com');
+}
+
+function applyProviderOptions(body) {
+  if (shouldDisableThinking()) {
+    body.enable_thinking = false;
+  }
+  return body;
+}
 
 function buildHeaders() {
   const headers = {
@@ -30,7 +55,7 @@ async function callDeepseek(prompt, options = {}) {
   const timeout = setTimeout(() => controller.abort(), TIMEOUT);
 
   try {
-    const body = {
+    const body = applyProviderOptions({
       model: MODEL,
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
@@ -39,13 +64,13 @@ async function callDeepseek(prompt, options = {}) {
       stream: false,
       max_tokens: options.maxTokens ?? 150,
       temperature: options.temperature ?? 0.7
-    };
+    });
 
     if (options.format === 'json') {
       body.response_format = { type: 'json_object' };
     }
 
-    const response = await fetch(`${API_BASE}/v1/chat/completions`, {
+    const response = await fetch(buildApiUrl('/chat/completions'), {
       method: 'POST',
       headers: buildHeaders(),
       body: JSON.stringify(body),
@@ -89,7 +114,7 @@ async function callDeepseekStream(prompt, options = {}, onToken) {
   const timeout = setTimeout(() => controller.abort(), TIMEOUT);
 
   try {
-    const body = {
+    const body = applyProviderOptions({
       model: MODEL,
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
@@ -99,9 +124,9 @@ async function callDeepseekStream(prompt, options = {}, onToken) {
       max_tokens: options.maxTokens ?? 150,
       temperature: options.temperature ?? 0.7,
       stream_options: { include_usage: false }
-    };
+    });
 
-    const response = await fetch(`${API_BASE}/v1/chat/completions`, {
+    const response = await fetch(buildApiUrl('/chat/completions'), {
       method: 'POST',
       headers: buildHeaders(),
       body: JSON.stringify(body),
@@ -176,7 +201,7 @@ async function checkStatus() {
   }
 
   try {
-    const response = await fetch(`${API_BASE}/v1/models`, {
+    const response = await fetch(buildApiUrl('/models'), {
       headers: buildHeaders(),
       signal: AbortSignal.timeout(10000)
     });
@@ -195,4 +220,14 @@ async function checkStatus() {
   }
 }
 
-module.exports = { callDeepseek, callDeepseekStream, checkStatus, MODEL, API_BASE, PROVIDER_NAME, buildHeaders };
+module.exports = {
+  callDeepseek,
+  callDeepseekStream,
+  checkStatus,
+  MODEL,
+  API_BASE,
+  PROVIDER_NAME,
+  buildHeaders,
+  buildApiUrl,
+  applyProviderOptions
+};

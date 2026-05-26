@@ -37,19 +37,19 @@ function getLastError() {
 function formatError(err) {
   const msg = err.message || String(err);
   if (msg.includes('API Key') || msg.includes('401')) {
-    return `DeepSeek API Key 无效或未配置。\n请在 electron/deepseek.js 中设置 API_KEY。`;
+    return `AI API Key 无效或未配置。\n请在 .env 中设置 AI_API_KEY。`;
   }
   if (msg.includes('402') || msg.includes('余额')) {
-    return `DeepSeek 账户余额不足，请充值后再试。`;
+    return `AI 账户余额不足，请充值后再试。`;
   }
   if (msg.includes('429') || msg.includes('频率')) {
     return `请求太频繁了，稍等一下再试～`;
   }
   if (msg.includes('fetch') || msg.includes('ECONNREFUSED') || msg.includes('ENOTFOUND')) {
-    return `无法连接到 DeepSeek API，请检查网络连接。\n（${msg}）`;
+    return `无法连接到 AI API，请检查网络连接。\n（${msg}）`;
   }
   if (msg.includes('timed out') || msg.includes('AbortError')) {
-    return `DeepSeek API 响应超时（30秒）。\n（${msg}）`;
+    return `AI API 响应超时（30秒）。\n（${msg}）`;
   }
   if (msg.includes('empty response')) {
     return `API 返回了空内容。\n（${msg}）`;
