@@ -13,6 +13,7 @@ body {
 }
 
 #pet-container {
+  --roll-x: 0px;
   position: relative;
   width: 240px;
   height: 320px;
@@ -27,7 +28,7 @@ body {
 #bubble {
   position: absolute;
   bottom: 150px;
-  left: 50%;
+  left: calc(50% + var(--roll-x));
   transform: translateX(-50%);
   background: rgba(255, 255, 255, 0.95);
   border-radius: 16px;
@@ -100,7 +101,6 @@ body {
 
 /* ===== Pet Rolling Stage ===== */
 #pet-stage {
-  --roll-x: 0px;
   --roll-rotation: 0deg;
   position: relative;
   width: 148px;

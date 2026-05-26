@@ -1,4 +1,5 @@
 // --- DOM Elements ---
+const petContainer = document.getElementById('pet-container');
 const petStage = document.getElementById('pet-stage');
 const petRoller = document.getElementById('pet-roller');
 const petBody = document.getElementById('pet-body');
@@ -84,7 +85,7 @@ function animateLocalRoll(now) {
     }
   }
 
-  petStage?.style.setProperty('--roll-x', `${rollX.toFixed(2)}px`);
+  petContainer?.style.setProperty('--roll-x', `${rollX.toFixed(2)}px`);
   petRoller?.style.setProperty('--roll-rotation', `${rollRotation.toFixed(2)}deg`);
   requestAnimationFrame(animateLocalRoll);
 }
