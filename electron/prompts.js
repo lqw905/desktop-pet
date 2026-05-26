@@ -42,7 +42,13 @@ ${context.recentConversations}
  * Build the chat reply prompt
  */
 function buildChatPrompt(conversationHistory, mood, context = {}) {
-  const historyStr = conversationHistory.map(m =>
+  const currentUserMessage = String(context.currentUserMessage || '').trim();
+  const history = [...conversationHistory];
+  if (currentUserMessage && history.at(-1)?.role === 'user' && history.at(-1)?.content === currentUserMessage) {
+    history.pop();
+  }
+
+  const historyStr = history.map(m =>
     `[${m.role === 'user' ? '用户' : '宠物'}]: ${m.content}`
   ).join('\n');
   const profile = context.profile || {};
@@ -86,6 +92,7 @@ ${persona.replyRules}
 - 长期记忆只是背景信息，不代表你正在实时看到用户当前在做什么
 - 如果用户问“我在干什么”“猜猜我在做什么”，但当前窗口未知，不要肯定地说用户正在做某事；只能说明“我只能根据记忆猜”
 - 最近对话里可能有其他人格或旧版本宠物的口吻，不要模仿不属于当前人格的称呼、拟声词、颜文字或格式
+- 不要复读你上一条回复；如果用户换了话题、叫你、纠正你或表达不满，必须回应当前这句话
 ${persona.preserveExpressiveStyle ? '- 当前人格允许使用“主人”、轻微撒娇、拟声词和少量颜文字；保持活泼，但不要影响回答问题。' : '- 当前人格不要使用“主人”、撒娇拟声词或颜文字，除非用户明确要求。'}
 
 ## 输出格式
@@ -113,7 +120,10 @@ ${memoryItemLines || '（暂无关键记忆）'}
 最近对话历史（只参考事实和上下文，不模仿其他人格口吻）：
 ${historyStr || '（暂无最近对话）'}
 
-现在用中文回复用户（自然一点，像朋友聊天一样）：`;
+当前用户刚说：
+${currentUserMessage || '（无）'}
+
+现在只回应“当前用户刚说”的这句话，用中文自然回复：`;
 }
 
 module.exports = { buildSentryPrompt, buildChatPrompt };

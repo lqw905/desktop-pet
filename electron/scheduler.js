@@ -73,6 +73,38 @@ function cleanPetReply(text, persona = getCurrentPersona()) {
   return cleaned.trim();
 }
 
+function normalizeReplyForCompare(text) {
+  return String(text || '')
+    .replace(/<\s*br\s*\/?\s*>/gi, '')
+    .replace(/<\/?[^>]+>/g, '')
+    .replace(/[\s，,。.!！?？、~～…（）()"'“”‘’：:；;]/g, '')
+    .toLowerCase();
+}
+
+function getLastPetReply(conversations = []) {
+  return [...conversations].reverse().find(message => message.role === 'pet')?.content || '';
+}
+
+function isRepeatedPetReply(reply, conversations = []) {
+  const current = normalizeReplyForCompare(reply);
+  const previous = normalizeReplyForCompare(getLastPetReply(conversations));
+  return !!current && current === previous;
+}
+
+async function retryRepeatedReply(reply, prompt, conversations, persona) {
+  const cleaned = cleanPetReply(reply, persona);
+  if (!isRepeatedPetReply(cleaned, conversations)) return cleaned;
+
+  const retryPrompt = `${prompt}
+
+重要：你刚才重复了上一条宠物回复。不要再说“${getLastPetReply(conversations)}”。
+请重新阅读“当前用户刚说”，换一个内容直接回应。`;
+
+  const retry = await callDeepseek(retryPrompt, { temperature: 0.9, maxTokens: 150 });
+  const retryCleaned = cleanPetReply(retry, persona);
+  return isRepeatedPetReply(retryCleaned, conversations) ? cleaned : retryCleaned;
+}
+
 async function generateReply(userMessage) {
   markUserActive();
   const fastSentiment = detectSentimentFast(userMessage);
@@ -87,6 +119,7 @@ async function generateReply(userMessage) {
   const context = {
     personaId: getCurrentPersonaId(),
     persona: getCurrentPersona(),
+    currentUserMessage: userMessage,
     time: new Date().toLocaleString('zh-CN'),
     ...windowContext,
     memorySummary: getMemorySummary(),
@@ -116,7 +149,7 @@ async function generateReply(userMessage) {
     return lastErrorMsg;
   }
 
-  reply = cleanPetReply(reply, context.persona);
+  reply = await retryRepeatedReply(reply, prompt, conversations, context.persona);
   lastErrorMsg = null;
   saveMessage('pet', reply);
   broadcastMessage('pet', reply);
@@ -148,6 +181,7 @@ async function generateReplyStreaming(userMessage, chatWindow) {
   const context = {
     personaId: getCurrentPersonaId(),
     persona: getCurrentPersona(),
+    currentUserMessage: userMessage,
     time: new Date().toLocaleString('zh-CN'),
     ...windowContext,
     memorySummary: getMemorySummary(),
@@ -183,7 +217,7 @@ async function generateReplyStreaming(userMessage, chatWindow) {
     return lastErrorMsg;
   }
 
-  reply = cleanPetReply(reply, context.persona);
+  reply = await retryRepeatedReply(reply, prompt, conversations, context.persona);
   lastErrorMsg = null;
   saveMessage('pet', reply);
   broadcastMessage('pet', reply);
@@ -586,6 +620,7 @@ module.exports = {
   triggerProactiveMessage, generateReply, generateReplyStreaming,
   scheduleNextCheck, getLastError, onChatMessage,
   // 导出用于测试
-  extractJson, formatError, cleanPetReply, detectSentimentFast, hasMemorySignal,
+  extractJson, formatError, cleanPetReply, normalizeReplyForCompare,
+  isRepeatedPetReply, detectSentimentFast, hasMemorySignal,
   getRandomGreeting, QUICK_GREETINGS, SENTIMENT_KEYWORDS
 };

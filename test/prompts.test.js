@@ -185,6 +185,21 @@ describe('buildChatPrompt', () => {
     expect(prompt).toContain('哈喽~你来啦！');
   });
 
+  test('当前用户消息单独突出，且不在历史里重复出现', () => {
+    const prompt = buildChatPrompt([
+      { role: 'user', content: '叫我主人' },
+      { role: 'pet', content: '嗯？又在看代码啊。' },
+      { role: 'user', content: '别说这话了' }
+    ], 'happy', {
+      ...context,
+      currentUserMessage: '别说这话了'
+    });
+    expect(prompt).toContain('当前用户刚说：\n别说这话了');
+    expect(prompt).toContain('不要复读你上一条回复');
+    expect(prompt).toContain('[宠物]: 嗯？又在看代码啊。');
+    expect(prompt).not.toContain('[用户]: 别说这话了');
+  });
+
   test('包含长期记忆', () => {
     const prompt = buildChatPrompt(conversations, 'happy', context);
     expect(prompt).toContain('喜欢早上喝咖啡');

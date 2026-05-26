@@ -76,7 +76,7 @@ const {
   hasMemorySignal, getRandomGreeting, QUICK_GREETINGS,
   SENTIMENT_KEYWORDS, setMuted, setBubbleEnabled,
   getLastError, onChatMessage, startScheduler, stopScheduler,
-  cleanPetReply
+  cleanPetReply, normalizeReplyForCompare, isRepeatedPetReply
 } = require('../electron/scheduler');
 
 // ==================== extractJson ====================
@@ -447,6 +447,24 @@ describe('cleanPetReply', () => {
     expect(cleanPetReply('呜，主人！我来啦<br><b>试试</b>', {
       preserveExpressiveStyle: false
     })).toBe('我来啦\n试试');
+  });
+});
+
+// ==================== repeat detection ====================
+
+describe('reply repeat detection', () => {
+  test('归一化回复用于比较时忽略常见标点和空白', () => {
+    expect(normalizeReplyForCompare('嗯？ 又在看代码啊。')).toBe('嗯又在看代码啊');
+  });
+
+  test('识别重复上一条宠物回复', () => {
+    const conversations = [
+      { role: 'user', content: '你好' },
+      { role: 'pet', content: '嗯？又在看代码啊。' },
+      { role: 'user', content: '别说这话了' }
+    ];
+    expect(isRepeatedPetReply('嗯？ 又在看代码啊', conversations)).toBe(true);
+    expect(isRepeatedPetReply('呜呜，我刚刚卡住复读了。主人想叫我什么呀？', conversations)).toBe(false);
   });
 });
 
