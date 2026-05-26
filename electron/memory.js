@@ -26,7 +26,7 @@ function getDefaultSettings() {
     memoryEnabled: getEnvBool('MEMORY_ENABLED', true),
     saveRawMessages: getEnvBool('SAVE_RAW_MESSAGES', true),
     maxConversations: getEnvInt('MAX_CONVERSATIONS', 100),
-    chatContextMessages: getEnvInt('CHAT_CONTEXT_MESSAGES', 4),
+    chatContextMessages: getEnvInt('CHAT_CONTEXT_MESSAGES', 10),
     sentryContextMessages: getEnvInt('SENTRY_CONTEXT_MESSAGES', 3),
     memoryReviewEvery: getEnvInt('MEMORY_REVIEW_EVERY', 4),
     maxMemoryItems: getEnvInt('MAX_MEMORY_ITEMS', 80),
@@ -114,6 +114,7 @@ function initDatabase() {
       }
       data.conversations.forEach(message => {
         if (!message.personaId) message.personaId = DEFAULT_PERSONA_ID;
+        if (!message.source) message.source = 'chat';
       });
       data.moodHistory.forEach(entry => {
         if (!entry.personaId) entry.personaId = DEFAULT_PERSONA_ID;
@@ -216,12 +217,13 @@ function deleteCustomPersona(personaId) {
   };
 }
 
-function saveMessage(role, content, personaId = getCurrentPersonaId()) {
+function saveMessage(role, content, personaId = getCurrentPersonaId(), source = 'chat') {
   const msg = {
     id: nextId++,
     personaId,
     role,
     content,
+    source,
     created_at: new Date().toISOString()
   };
   data.conversations.push(msg);
@@ -234,6 +236,28 @@ function getRecentConversations(limit = 10) {
   const personaId = getCurrentPersonaId();
   const all = data.conversations.filter(message => (message.personaId || DEFAULT_PERSONA_ID) === personaId);
   return all.slice(-limit);
+}
+
+function getRecentChatConversations(limit = 10) {
+  const personaId = getCurrentPersonaId();
+  const personaMessages = data.conversations.filter(message => (message.personaId || DEFAULT_PERSONA_ID) === personaId);
+  const chatMessages = [];
+
+  personaMessages.forEach((message, index) => {
+    if (message.source === 'proactive') return;
+    if (message.role === 'user') {
+      chatMessages.push(message);
+      return;
+    }
+
+    const previous = personaMessages[index - 1];
+    const isChatReply = message.source === 'chat' && previous?.role === 'user';
+    if (message.role === 'pet' && isChatReply) {
+      chatMessages.push(message);
+    }
+  });
+
+  return chatMessages.slice(-limit);
 }
 
 function getMemorySettings() {
@@ -572,7 +596,7 @@ module.exports = {
   initDatabase, saveData, closeDatabase,
   getCurrentPersonaId, setCurrentPersonaId,
   getAllPersonas, getCurrentPersona, saveCustomPersona, deleteCustomPersona,
-  saveMessage, getRecentConversations, getTodayMessageCount, getLastPetMessageTime,
+  saveMessage, getRecentConversations, getRecentChatConversations, getTodayMessageCount, getLastPetMessageTime,
   setMemory, getMemory,
   saveMood, getLastMood, getLastMoodReason,
   cleanOldConversations,

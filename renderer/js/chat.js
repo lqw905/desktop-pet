@@ -7,6 +7,7 @@ const chatTitle = document.getElementById('chat-title');
 
 let typingTimer = null;
 let streamingMsgDiv = null;
+let isComposingText = false;
 const TYPING_TIMEOUT = 35000;
 
 // --- Add message to chat ---
@@ -93,8 +94,17 @@ function sendMessage() {
 
 // --- Event Listeners ---
 sendBtn.addEventListener('click', sendMessage);
+inputField.addEventListener('compositionstart', () => {
+  isComposingText = true;
+});
+inputField.addEventListener('compositionend', () => {
+  isComposingText = false;
+});
 inputField.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') sendMessage();
+  if (e.key !== 'Enter') return;
+  if (e.isComposing || isComposingText || e.keyCode === 229) return;
+  e.preventDefault();
+  sendMessage();
 });
 
 closeBtn.addEventListener('click', () => {

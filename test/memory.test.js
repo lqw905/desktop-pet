@@ -21,7 +21,7 @@ const {
   initDatabase, saveData, closeDatabase, clearMemory,
   getCurrentPersonaId, setCurrentPersonaId,
   getAllPersonas, getCurrentPersona, saveCustomPersona, deleteCustomPersona,
-  saveMessage, getRecentConversations, getTodayMessageCount,
+  saveMessage, getRecentConversations, getRecentChatConversations, getTodayMessageCount,
   getLastPetMessageTime, setMemory, getMemory,
   saveMood, getLastMood, getLastMoodReason,
   getMemorySettings, getMemorySummary, setMemorySummary,
@@ -178,6 +178,12 @@ describe('saveMessage / getRecentConversations', () => {
     expect(new Date(msg.created_at).getTime()).not.toBeNaN();
   });
 
+  test('消息默认标记为 chat 来源', () => {
+    clearMemory();
+    const msg = saveMessage('user', 'test');
+    expect(msg.source).toBe('chat');
+  });
+
   test('getRecentConversations 限制数量', () => {
     clearMemory();
     for (let i = 0; i < 20; i++) {
@@ -198,6 +204,43 @@ describe('saveMessage / getRecentConversations', () => {
     expect(getRecentConversations(10).map(m => m.content)).toEqual(['小伴消息']);
     setCurrentPersonaId(persona.id);
     expect(getRecentConversations(10).map(m => m.content)).toEqual(['自定义消息']);
+  });
+
+  test('聊天上下文过滤主动提醒消息', () => {
+    clearMemory();
+    saveMessage('user', '写一段 ts 代码');
+    saveMessage('pet', '好的，主人，我来写。');
+    saveMessage('pet', '主人在用 Codex 呢，要不要休息？', getCurrentPersonaId(), 'proactive');
+    saveMessage('pet', '主人在用 Chrome 呢，要不要休息？', getCurrentPersonaId(), 'proactive');
+    saveMessage('user', '我刚刚问了什么？');
+
+    expect(getRecentConversations(10).map(m => m.content)).toEqual([
+      '写一段 ts 代码',
+      '好的，主人，我来写。',
+      '主人在用 Codex 呢，要不要休息？',
+      '主人在用 Chrome 呢，要不要休息？',
+      '我刚刚问了什么？'
+    ]);
+    expect(getRecentChatConversations(10).map(m => m.content)).toEqual([
+      '写一段 ts 代码',
+      '好的，主人，我来写。',
+      '我刚刚问了什么？'
+    ]);
+  });
+
+  test('聊天上下文兼容旧数据，过滤连续宠物消息', () => {
+    clearMemory();
+    saveMessage('user', '我要写 TS');
+    saveMessage('pet', '好的，我帮你。');
+    saveMessage('pet', '主人在用 Codex 呢。');
+    saveMessage('pet', '主人在用 Chrome 呢。');
+    saveMessage('user', '我刚刚说了什么？');
+
+    expect(getRecentChatConversations(10).map(m => m.content)).toEqual([
+      '我要写 TS',
+      '好的，我帮你。',
+      '我刚刚说了什么？'
+    ]);
   });
 });
 

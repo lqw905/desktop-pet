@@ -3,7 +3,7 @@ const { buildSentryPrompt, buildChatPrompt } = require('./prompts');
 const { buildContext, markUserActive, getTimeContext, getActiveWindowContext, getIdleMinutes, isWorkContext } = require('./events');
 const { getCurrentMood, triggerEvent, getProactiveInterval } = require('./mood');
 const {
-  saveMessage, getRecentConversations, getTodayMessageCount,
+  saveMessage, getRecentConversations, getRecentChatConversations, getTodayMessageCount,
   getLastPetMessageTime, getMemorySettings, getMemorySummary,
   getProfile, shouldReviewMemory, getMessagesForMemoryReview,
   markMemoryReviewed, applyMemoryReview, getMemoryContextItems,
@@ -91,6 +91,19 @@ function isRepeatedPetReply(reply, conversations = []) {
   return !!current && current === previous;
 }
 
+function tryBuildShortTermRecallReply(userMessage, conversations = [], persona = getCurrentPersona()) {
+  const text = String(userMessage || '').trim();
+  const asksRecentUserMessage = /(刚刚|刚才|上一句|上句话|上个问题|上一个问题|前面).*(说|问|发|讲|提|聊|问题)|我(刚刚|刚才).*(说|问|发|讲|提).*什么/.test(text);
+  if (!asksRecentUserMessage) return null;
+
+  const userMessages = conversations.filter(message => message.role === 'user');
+  const previousUserMessage = userMessages.length >= 2 ? userMessages[userMessages.length - 2] : null;
+  if (!previousUserMessage?.content) return null;
+
+  const prefix = persona?.preserveExpressiveStyle ? '主人刚刚说的是' : '你刚刚说的是';
+  return `${prefix}：“${previousUserMessage.content}”。`;
+}
+
 async function retryRepeatedReply(reply, prompt, conversations, persona) {
   const cleaned = cleanPetReply(reply, persona);
   if (!isRepeatedPetReply(cleaned, conversations)) return cleaned;
@@ -114,7 +127,7 @@ async function generateReply(userMessage) {
   broadcastMessage('user', userMessage);
 
   const settings = getMemorySettings();
-  const conversations = getRecentConversations(settings.chatContextMessages);
+  const conversations = getRecentChatConversations(settings.chatContextMessages);
   const windowContext = getActiveWindowContext();
   const context = {
     personaId: getCurrentPersonaId(),
@@ -127,6 +140,13 @@ async function generateReply(userMessage) {
     memoryItems: getMemoryContextItems()
   };
   const prompt = buildChatPrompt(conversations, getCurrentMood(), context);
+
+  const recalledReply = tryBuildShortTermRecallReply(userMessage, conversations, context.persona);
+  if (recalledReply) {
+    saveMessage('pet', recalledReply);
+    broadcastMessage('pet', recalledReply);
+    return recalledReply;
+  }
 
   let reply = null;
   let lastError = null;
@@ -176,7 +196,7 @@ async function generateReplyStreaming(userMessage, chatWindow) {
   saveMessage('user', userMessage);
 
   const settings = getMemorySettings();
-  const conversations = getRecentConversations(settings.chatContextMessages);
+  const conversations = getRecentChatConversations(settings.chatContextMessages);
   const windowContext = getActiveWindowContext();
   const context = {
     personaId: getCurrentPersonaId(),
@@ -189,6 +209,13 @@ async function generateReplyStreaming(userMessage, chatWindow) {
     memoryItems: getMemoryContextItems()
   };
   const prompt = buildChatPrompt(conversations, getCurrentMood(), context);
+
+  const recalledReply = tryBuildShortTermRecallReply(userMessage, conversations, context.persona);
+  if (recalledReply) {
+    saveMessage('pet', recalledReply);
+    broadcastMessage('pet', recalledReply);
+    return recalledReply;
+  }
 
   let reply = null;
   let lastError = null;
@@ -340,7 +367,7 @@ async function showProactiveMessage(text) {
   if (!petWindow || petWindow.isDestroyed()) return;
   text = cleanPetReply(text);
 
-  saveMessage('pet', text);
+  saveMessage('pet', text, getCurrentPersonaId(), 'proactive');
   broadcastMessage('pet', text);
 
   if (isBubbleEnabled) {
@@ -622,5 +649,6 @@ module.exports = {
   // 导出用于测试
   extractJson, formatError, cleanPetReply, normalizeReplyForCompare,
   isRepeatedPetReply, detectSentimentFast, hasMemorySignal,
+  tryBuildShortTermRecallReply,
   getRandomGreeting, QUICK_GREETINGS, SENTIMENT_KEYWORDS
 };

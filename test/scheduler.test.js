@@ -40,11 +40,12 @@ jest.mock('../electron/mood', () => ({
 jest.mock('../electron/memory', () => ({
   saveMessage: jest.fn(),
   getRecentConversations: jest.fn(() => []),
+  getRecentChatConversations: jest.fn(() => []),
   getTodayMessageCount: jest.fn(() => 0),
   getLastPetMessageTime: jest.fn(() => null),
   getMemorySettings: jest.fn(() => ({
     memoryEnabled: true, saveRawMessages: true,
-    chatContextMessages: 4, sentryContextMessages: 3,
+    chatContextMessages: 10, sentryContextMessages: 3,
     memoryReviewEvery: 4, maxMemoryItems: 80,
     maxInboxItems: 30, memoryContextItems: 10,
     summaryMaxChars: 1200, summaryUpdateEvery: 10,
@@ -76,7 +77,8 @@ const {
   hasMemorySignal, getRandomGreeting, QUICK_GREETINGS,
   SENTIMENT_KEYWORDS, setMuted, setBubbleEnabled,
   getLastError, onChatMessage, startScheduler, stopScheduler,
-  cleanPetReply, normalizeReplyForCompare, isRepeatedPetReply
+  cleanPetReply, normalizeReplyForCompare, isRepeatedPetReply,
+  tryBuildShortTermRecallReply
 } = require('../electron/scheduler');
 
 // ==================== extractJson ====================
@@ -465,6 +467,30 @@ describe('reply repeat detection', () => {
     ];
     expect(isRepeatedPetReply('嗯？ 又在看代码啊', conversations)).toBe(true);
     expect(isRepeatedPetReply('呜呜，我刚刚卡住复读了。主人想叫我什么呀？', conversations)).toBe(false);
+  });
+});
+
+// ==================== short-term recall ====================
+
+describe('tryBuildShortTermRecallReply', () => {
+  test('用户问刚刚说了什么时，直接读取上一条用户消息', () => {
+    const conversations = [
+      { role: 'user', content: '写一段 ts 代码' },
+      { role: 'pet', content: '好的，主人。' },
+      { role: 'pet', content: '主动提醒', source: 'proactive' },
+      { role: 'user', content: '我刚刚说了什么？' }
+    ];
+
+    expect(tryBuildShortTermRecallReply('我刚刚说了什么？', conversations, {
+      preserveExpressiveStyle: true
+    })).toBe('主人刚刚说的是：“写一段 ts 代码”。');
+  });
+
+  test('非回忆类问题返回 null', () => {
+    expect(tryBuildShortTermRecallReply('写好了吗', [
+      { role: 'user', content: '写一段 ts 代码' },
+      { role: 'user', content: '写好了吗' }
+    ], {})).toBeNull();
   });
 });
 

@@ -200,6 +200,12 @@ describe('buildChatPrompt', () => {
     expect(prompt).not.toContain('[用户]: 别说这话了');
   });
 
+  test('提示词明确短期上下文优先用于刚刚说了什么', () => {
+    const prompt = buildChatPrompt(conversations, 'happy', context);
+    expect(prompt).toContain('最近对话历史是真实短期上下文');
+    expect(prompt).toContain('不要说自己不记得');
+  });
+
   test('包含长期记忆', () => {
     const prompt = buildChatPrompt(conversations, 'happy', context);
     expect(prompt).toContain('喜欢早上喝咖啡');
