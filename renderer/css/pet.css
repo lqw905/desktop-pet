@@ -26,7 +26,7 @@ body {
 /* ===== Speech Bubble ===== */
 #bubble {
   position: absolute;
-  bottom: 150px;
+  bottom: 224px;
   left: 50%;
   transform: translateX(-50%);
   background: rgba(255, 255, 255, 0.95);
@@ -100,12 +100,14 @@ body {
 
 /* ===== Pet Body ===== */
 #pet-body {
-  width: 90px;
-  height: 90px;
-  border-radius: 50%;
+  width: 220px;
+  height: 200px;
   position: relative;
   cursor: grab;
-  transition: background-color 0.6s ease, transform 0.3s ease;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  transition: transform 0.3s ease, filter 0.3s ease;
 }
 
 #pet-body:active {
@@ -113,11 +115,33 @@ body {
 }
 
 /* ---- Colors ---- */
-#pet-body.mood-happy   { background: linear-gradient(135deg, #FFE082, #FFB74D); }
-#pet-body.mood-excited { background: linear-gradient(135deg, #FFAB91, #FF6E40); }
-#pet-body.mood-bored   { background: linear-gradient(135deg, #B0BEC5, #78909C); }
-#pet-body.mood-sleepy  { background: linear-gradient(135deg, #BBDEFB, #64B5F6); }
-#pet-body.mood-caring  { background: linear-gradient(135deg, #F8BBD0, #F06292); }
+#pet-sprite {
+  display: block;
+  width: 220px;
+  height: 200px;
+  object-fit: contain;
+  object-position: center bottom;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+#pet-body.mood-happy   { filter: saturate(1) brightness(1); }
+#pet-body.mood-excited { filter: saturate(1.12) brightness(1.03); }
+#pet-body.mood-bored   { filter: saturate(0.76) brightness(0.96); }
+#pet-body.mood-sleepy  { filter: saturate(0.7) brightness(1.02); }
+#pet-body.mood-caring  { filter: saturate(1.04) brightness(1.02); }
+
+#pet-body.expression-hover #pet-sprite,
+#pet-body.expression-talk #pet-sprite,
+#pet-body.expression-surprised #pet-sprite {
+  content: url("../assets/pet/wave.png");
+}
+
+#pet-body.expression-squish #pet-sprite,
+#pet-body.expression-dizzy #pet-sprite {
+  content: url("../assets/pet/sit.png");
+}
 
 /* ---- Animations ---- */
 #pet-body.mood-happy   { animation: float-happy 3s ease-in-out infinite; }
@@ -408,12 +432,7 @@ body {
 
 /* ===== Shadow ===== */
 #pet-shadow {
-  width: 60px;
-  height: 10px;
-  background: rgba(0, 0, 0, 0.1);
-  border-radius: 50%;
-  margin-top: 6px;
-  transition: all 0.5s ease;
+  display: none;
 }
 
 @keyframes shadow-happy {
