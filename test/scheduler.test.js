@@ -78,8 +78,14 @@ const {
   SENTIMENT_KEYWORDS, setMuted, setBubbleEnabled,
   getLastError, onChatMessage, startScheduler, stopScheduler,
   cleanPetReply, normalizeReplyForCompare, isRepeatedPetReply,
-  tryBuildShortTermRecallReply
+  tryBuildShortTermRecallReply, generateReplyStreaming
 } = require('../electron/scheduler');
+const deepseek = require('../electron/deepseek');
+const memory = require('../electron/memory');
+
+beforeEach(() => {
+  jest.clearAllMocks();
+});
 
 // ==================== extractJson ====================
 
@@ -499,6 +505,56 @@ describe('tryBuildShortTermRecallReply', () => {
 describe('onChatMessage', () => {
   test('注册回调不抛错', () => {
     expect(() => onChatMessage(jest.fn())).not.toThrow();
+  });
+});
+
+describe('generateReplyStreaming', () => {
+  test('流式聊天会广播用户消息和宠物回复', async () => {
+    const received = [];
+    onChatMessage(message => received.push(message));
+    deepseek.callDeepseekStream.mockResolvedValue('好的');
+
+    await generateReplyStreaming('你好', null);
+
+    expect(received).toEqual([
+      { role: 'user', content: '你好' },
+      { role: 'pet', content: '好的' }
+    ]);
+  });
+
+  test('强记忆信号会绕过审查条数阈值触发长期记忆审查', async () => {
+    deepseek.callDeepseekStream.mockResolvedValue('记住啦');
+    deepseek.callDeepseek.mockImplementation(async (prompt) => {
+      if (String(prompt).includes('长期记忆审查器')) {
+        return JSON.stringify({
+          shouldPersist: true,
+          reason: '用户明确表达偏好',
+          memoryItems: [
+            {
+              type: 'preference',
+              content: '主人喜欢咖啡',
+              evidence: '用户说喜欢咖啡',
+              confidence: 0.9,
+              sensitivity: 'low',
+              sourceMessageIds: [1]
+            }
+          ]
+        });
+      }
+      return 'neutral';
+    });
+    memory.shouldReviewMemory.mockReturnValue(false);
+    memory.getMessagesForMemoryReview.mockReturnValue([
+      { id: 1, role: 'user', content: '请记住我喜欢咖啡' }
+    ]);
+
+    await generateReplyStreaming('请记住我喜欢咖啡', null);
+    await new Promise(resolve => setImmediate(resolve));
+
+    expect(memory.applyMemoryReview).toHaveBeenCalledWith(
+      expect.objectContaining({ shouldPersist: true }),
+      1
+    );
   });
 });
 

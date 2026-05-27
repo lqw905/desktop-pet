@@ -19,14 +19,25 @@ let lastErrorMsg = null;
 let chatMessageCallback = null;
 let isUpdatingMemory = false;
 let lastMemoryUpdateErrorAt = 0;
+let memoryUpdateCallback = null;
 
 function onChatMessage(cb) {
   chatMessageCallback = cb;
 }
 
+function onMemoryUpdated(cb) {
+  memoryUpdateCallback = cb;
+}
+
 function broadcastMessage(role, content) {
   if (chatMessageCallback) {
     chatMessageCallback({ role, content });
+  }
+}
+
+function notifyMemoryUpdated() {
+  if (memoryUpdateCallback) {
+    memoryUpdateCallback();
   }
 }
 
@@ -125,6 +136,7 @@ async function generateReply(userMessage) {
   triggerEvent('user_interaction');
   saveMessage('user', userMessage);
   broadcastMessage('user', userMessage);
+  const forceMemoryReview = hasMemorySignal([{ role: 'user', content: userMessage }]);
 
   const settings = getMemorySettings();
   const conversations = getRecentChatConversations(settings.chatContextMessages);
@@ -145,6 +157,7 @@ async function generateReply(userMessage) {
   if (recalledReply) {
     saveMessage('pet', recalledReply);
     broadcastMessage('pet', recalledReply);
+    maybeUpdateLongTermMemory({ force: forceMemoryReview }).catch(() => {});
     return recalledReply;
   }
 
@@ -173,7 +186,7 @@ async function generateReply(userMessage) {
   lastErrorMsg = null;
   saveMessage('pet', reply);
   broadcastMessage('pet', reply);
-  maybeUpdateLongTermMemory().catch(() => {});
+  maybeUpdateLongTermMemory({ force: forceMemoryReview }).catch(() => {});
 
   const petWindow = getPetWindow();
   if (petWindow && !petWindow.isDestroyed()) {
@@ -194,6 +207,8 @@ async function generateReplyStreaming(userMessage, chatWindow) {
   if (fastSentiment) triggerEvent(fastSentiment);
   triggerEvent('user_interaction');
   saveMessage('user', userMessage);
+  broadcastMessage('user', userMessage);
+  const forceMemoryReview = hasMemorySignal([{ role: 'user', content: userMessage }]);
 
   const settings = getMemorySettings();
   const conversations = getRecentChatConversations(settings.chatContextMessages);
@@ -214,6 +229,7 @@ async function generateReplyStreaming(userMessage, chatWindow) {
   if (recalledReply) {
     saveMessage('pet', recalledReply);
     broadcastMessage('pet', recalledReply);
+    maybeUpdateLongTermMemory({ force: forceMemoryReview }).catch(() => {});
     return recalledReply;
   }
 
@@ -248,7 +264,7 @@ async function generateReplyStreaming(userMessage, chatWindow) {
   lastErrorMsg = null;
   saveMessage('pet', reply);
   broadcastMessage('pet', reply);
-  maybeUpdateLongTermMemory().catch(() => {});
+  maybeUpdateLongTermMemory({ force: forceMemoryReview }).catch(() => {});
 
   const petWindow = getPetWindow();
   if (petWindow && !petWindow.isDestroyed()) {
@@ -456,9 +472,10 @@ function formatRecentConvForSentry() {
   return conversations.map(c => `[${c.role === 'user' ? '用户' : '宠物'}]: ${c.content.substring(0, 60)}`).join('\n');
 }
 
-async function maybeUpdateLongTermMemory() {
+async function maybeUpdateLongTermMemory(options = {}) {
   const settings = getMemorySettings();
-  if (!settings.memoryEnabled || !shouldReviewMemory() || isUpdatingMemory) return;
+  const force = options.force === true;
+  if (!settings.memoryEnabled || (!force && !shouldReviewMemory()) || isUpdatingMemory) return;
   if (Date.now() - lastMemoryUpdateErrorAt < 10 * 60 * 1000) return;
 
   const messages = getMessagesForMemoryReview(Math.max(settings.memoryReviewEvery, 10));
@@ -466,6 +483,7 @@ async function maybeUpdateLongTermMemory() {
 
   if (!hasMemorySignal(messages)) {
     markMemoryReviewed(messages.at(-1)?.id);
+    notifyMemoryUpdated();
     return;
   }
 
@@ -548,6 +566,7 @@ JSON 格式：
     });
     const parsed = extractJson(raw);
     applyMemoryReview(parsed || { shouldPersist: false, reason: 'LLM 未返回有效审查结果' }, messages.at(-1)?.id);
+    notifyMemoryUpdated();
     lastMemoryUpdateErrorAt = 0;
   } catch (err) {
     lastMemoryUpdateErrorAt = Date.now();
@@ -645,7 +664,7 @@ function stopScheduler() {
 module.exports = {
   startScheduler, stopScheduler, setMuted, setBubbleEnabled,
   triggerProactiveMessage, generateReply, generateReplyStreaming,
-  scheduleNextCheck, getLastError, onChatMessage,
+  scheduleNextCheck, getLastError, onChatMessage, onMemoryUpdated,
   // 导出用于测试
   extractJson, formatError, cleanPetReply, normalizeReplyForCompare,
   isRepeatedPetReply, detectSentimentFast, hasMemorySignal,

@@ -20,6 +20,7 @@ const deletePersonaBtn = document.getElementById('btn-delete-persona');
 const chatHistory = document.getElementById('chat-history');
 const memorySummary = document.getElementById('memory-summary');
 const clearMemoryBtn = document.getElementById('btn-clear-memory');
+const refreshStateBtn = document.getElementById('btn-refresh-state');
 const rollingToggle = document.getElementById('rolling-toggle');
 const resetPetPositionBtn = document.getElementById('btn-reset-pet-position');
 const apiProfileSelect = document.getElementById('api-profile-select');
@@ -100,6 +101,11 @@ function closePersonaEditor() {
 }
 
 function applyPersonaState(state = {}) {
+  applyControlState(state);
+  closePersonaEditor();
+}
+
+function applyControlState(state = {}) {
   updatePersonaDisplay(state);
   if (state.mood) {
     updateMoodDisplay(state.mood, state.moodReason);
@@ -250,7 +256,10 @@ if (window.controlAPI) {
 
   window.controlAPI.onPersonaChanged((state) => {
     applyPersonaState(state);
-    closePersonaEditor();
+  });
+
+  window.controlAPI.onControlState((state) => {
+    applyControlState(state);
   });
 
   window.controlAPI.onChatMessage(({ role, content }) => {
@@ -259,14 +268,7 @@ if (window.controlAPI) {
 
   // Load initial state
   window.controlAPI.getState().then(state => {
-    updatePersonaDisplay(state);
-    if (state.mood) updateMoodDisplay(state.mood, state.moodReason);
-    updateRollingDisplay(state);
-    updateApiDisplay(state);
-    if (state.recentMessages) {
-      state.recentMessages.forEach(m => addChatEntry(m.role, m.content));
-    }
-    updateMemoryDisplay(state);
+    applyControlState(state);
   });
 }
 
@@ -354,6 +356,17 @@ clearMemoryBtn.addEventListener('click', async () => {
     applyPersonaState(state);
   } finally {
     clearMemoryBtn.disabled = false;
+  }
+});
+
+refreshStateBtn.addEventListener('click', async () => {
+  if (!window.controlAPI) return;
+  refreshStateBtn.disabled = true;
+  try {
+    const state = await window.controlAPI.getState();
+    applyControlState(state);
+  } finally {
+    refreshStateBtn.disabled = false;
   }
 });
 

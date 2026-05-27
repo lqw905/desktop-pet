@@ -35,6 +35,7 @@ contextBridge.exposeInMainWorld('petAPI', {
 contextBridge.exposeInMainWorld('controlAPI', {
   onMoodChanged: (callback) => ipcRenderer.on('mood-changed', (_event, data) => callback(data)),
   onPersonaChanged: (callback) => ipcRenderer.on('persona-changed', (_event, data) => callback(data)),
+  onControlState: (callback) => ipcRenderer.on('control-state', (_event, data) => callback(data)),
   onChatMessage: (callback) => ipcRenderer.on('chat-message', (_event, data) => callback(data)),
   getState: () => ipcRenderer.invoke('get-state'),
   clearMemory: () => ipcRenderer.invoke('clear-memory'),

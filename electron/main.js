@@ -299,6 +299,12 @@ app.whenReady().then(async () => {
     };
   }
 
+  scheduler.onMemoryUpdated(() => {
+    if (controlWindow && !controlWindow.isDestroyed()) {
+      controlWindow.webContents.send('control-state', buildControlState());
+    }
+  });
+
   function notifyPersonaState() {
     const state = buildControlState();
     if (petWindow && !petWindow.isDestroyed()) {
