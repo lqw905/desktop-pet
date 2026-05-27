@@ -21,6 +21,7 @@ const chatHistory = document.getElementById('chat-history');
 const memorySummary = document.getElementById('memory-summary');
 const clearMemoryBtn = document.getElementById('btn-clear-memory');
 const rollingToggle = document.getElementById('rolling-toggle');
+const resetPetPositionBtn = document.getElementById('btn-reset-pet-position');
 const apiProfileSelect = document.getElementById('api-profile-select');
 const apiProfileName = document.getElementById('api-profile-name');
 const apiProviderSelect = document.getElementById('api-provider-select');
@@ -364,6 +365,16 @@ rollingToggle.addEventListener('change', async () => {
     if (state) updateRollingDisplay(state);
   } finally {
     rollingToggle.disabled = false;
+  }
+});
+
+resetPetPositionBtn.addEventListener('click', async () => {
+  if (!window.controlAPI) return;
+  resetPetPositionBtn.disabled = true;
+  try {
+    await window.controlAPI.resetPetPosition();
+  } finally {
+    resetPetPositionBtn.disabled = false;
   }
 });
 

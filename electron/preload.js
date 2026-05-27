@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('petAPI', {
   onUpdateMood: (callback) => ipcRenderer.on('update-mood', (_event, mood) => callback(mood)),
   onToggleBubble: (callback) => ipcRenderer.on('toggle-bubble', (_event, enabled) => callback(enabled)),
   onToggleRolling: (callback) => ipcRenderer.on('toggle-rolling', (_event, enabled) => callback(enabled)),
+  onResetPosition: (callback) => ipcRenderer.on('reset-pet-position', () => callback()),
 
   // Chat actions
   sendMessage: (text) => ipcRenderer.send('user-message', text),
@@ -37,6 +38,7 @@ contextBridge.exposeInMainWorld('controlAPI', {
   onChatMessage: (callback) => ipcRenderer.on('chat-message', (_event, data) => callback(data)),
   getState: () => ipcRenderer.invoke('get-state'),
   clearMemory: () => ipcRenderer.invoke('clear-memory'),
+  resetPetPosition: () => ipcRenderer.invoke('reset-pet-position'),
   setRollingEnabled: (enabled) => ipcRenderer.invoke('set-rolling-enabled', enabled),
   saveApiConfig: (config) => ipcRenderer.invoke('save-api-config', config),
   setApiProfile: (profileId) => ipcRenderer.invoke('set-api-profile', profileId),

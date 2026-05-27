@@ -36,7 +36,7 @@ let nextRollTargetAt = 0;
 let isPointerNearPet = false;
 let activeRoll = null;
 let isPickingRoll = false;
-let rollingEnabled = true;
+let rollingEnabled = false;
 
 function getMotionBounds() {
   const display = window.screen || {};
@@ -137,6 +137,12 @@ function syncRollStyles() {
 
 function stopRollAtCurrentPosition() {
   activeRoll = null;
+  syncRollStyles();
+}
+
+function resetRollPose() {
+  activeRoll = null;
+  rollRotation = 0;
   syncRollStyles();
 }
 
@@ -370,6 +376,11 @@ if (window.petAPI) {
 
   window.petAPI.onToggleRolling((enabled) => {
     setRollingEnabled(enabled);
+  });
+
+  window.petAPI.onResetPosition(() => {
+    resetRollPose();
+    nextRollTargetAt = performance.now() + 1800;
   });
 }
 

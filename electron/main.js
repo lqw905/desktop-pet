@@ -14,7 +14,7 @@ for (const envPath of envPaths) {
 }
 
 const { app, ipcMain, BrowserWindow, screen } = require('electron');
-const { createPetWindow, getPetWindow, togglePetWindow } = require('./window');
+const { createPetWindow, getPetWindow, togglePetWindow, resetPetWindowPosition } = require('./window');
 const { createTray, getIsMuted, getIsBubbleEnabled } = require('./tray');
 
 let petWindow = null;
@@ -27,6 +27,23 @@ let scheduler = null;
 let memory = null;
 let mood = null;
 let deepseek = null;
+
+function getRollingEnabled() {
+  return memory?.getMemorySettings?.().rollingEnabled !== false;
+}
+
+function syncRollingStateToPet() {
+  if (petWindow && !petWindow.isDestroyed()) {
+    petWindow.webContents.send('toggle-rolling', getRollingEnabled());
+  }
+}
+
+function attachPetWindowStateSync() {
+  if (!petWindow || petWindow.isDestroyed()) return;
+  petWindow.webContents.once('did-finish-load', () => {
+    syncRollingStateToPet();
+  });
+}
 
 function initBackend() {
   memory = require('./memory');
@@ -122,6 +139,7 @@ app.whenReady().then(async () => {
 
   // Create windows
   petWindow = createPetWindow();
+  attachPetWindowStateSync();
 
   // Force the pet window to show and focus immediately
   petWindow.show();
@@ -190,6 +208,14 @@ app.whenReady().then(async () => {
     if (!petWindow || petWindow.isDestroyed()) return null;
     const [x, y] = petWindow.getPosition();
     return { x, y };
+  });
+
+  ipcMain.handle('reset-pet-position', () => {
+    const position = resetPetWindowPosition();
+    if (position && petWindow && !petWindow.isDestroyed()) {
+      petWindow.webContents.send('reset-pet-position');
+    }
+    return position;
   });
 
   ipcMain.on('move-window-to', (_event, nx, ny) => {
@@ -331,10 +357,8 @@ app.whenReady().then(async () => {
   });
 
   ipcMain.handle('set-rolling-enabled', (_event, enabled) => {
-    const rollingEnabled = memory.setRollingEnabled(enabled);
-    if (petWindow && !petWindow.isDestroyed()) {
-      petWindow.webContents.send('toggle-rolling', rollingEnabled);
-    }
+    memory.setRollingEnabled(enabled);
+    syncRollingStateToPet();
     return buildControlState();
   });
 
@@ -422,6 +446,7 @@ app.on('before-quit', () => {
 app.on('activate', () => {
   if (!petWindow || petWindow.isDestroyed()) {
     petWindow = createPetWindow();
+    attachPetWindowStateSync();
   } else {
     petWindow.show();
   }

@@ -3,14 +3,25 @@ const path = require('path');
 
 let petWindow = null;
 
+function getDefaultPetPosition(targetWindow = null) {
+  const display = screen.getPrimaryDisplay();
+  const { x, y, width, height } = display.workArea;
+  const [windowWidth, windowHeight] = targetWindow?.getSize?.() || [240, 320];
+
+  return {
+    x: x + width - windowWidth - 20,
+    y: y + height - windowHeight - 40
+  };
+}
+
 function createPetWindow() {
-  const { width: screenWidth, height: screenHeight } = screen.getPrimaryDisplay().workAreaSize;
+  const defaultPosition = getDefaultPetPosition();
 
   petWindow = new BrowserWindow({
     width: 240,
     height: 320,
-    x: screenWidth - 260,
-    y: screenHeight - 360,
+    x: defaultPosition.x,
+    y: defaultPosition.y,
     transparent: true,
     frame: false,
     alwaysOnTop: true,
@@ -44,4 +55,11 @@ function togglePetWindow() {
   }
 }
 
-module.exports = { createPetWindow, getPetWindow, togglePetWindow };
+function resetPetWindowPosition() {
+  if (!petWindow || petWindow.isDestroyed()) return null;
+  const position = getDefaultPetPosition(petWindow);
+  petWindow.setPosition(position.x, position.y);
+  return position;
+}
+
+module.exports = { createPetWindow, getPetWindow, togglePetWindow, resetPetWindowPosition };
