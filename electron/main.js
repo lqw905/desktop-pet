@@ -266,7 +266,10 @@ app.whenReady().then(async () => {
       memorySummary: memory.getMemorySummary(),
       profile: memory.getProfile(),
       memoryItems: memory.getMemoryItems(8),
-      memoryStats: memory.getMemoryStats()
+      memoryStats: memory.getMemoryStats(),
+      apiConfig: deepseek.getPublicApiConfig(),
+      apiProfiles: deepseek.getApiProfiles(),
+      apiPresets: deepseek.getApiPresets()
     };
   }
 
@@ -308,6 +311,25 @@ app.whenReady().then(async () => {
     return buildControlState();
   });
 
+  ipcMain.handle('save-api-config', (_event, config) => {
+    deepseek.saveApiConfig(config);
+    return buildControlState();
+  });
+
+  ipcMain.handle('set-api-profile', (_event, profileId) => {
+    deepseek.setApiProfile(profileId);
+    return buildControlState();
+  });
+
+  ipcMain.handle('delete-api-profile', (_event, profileId) => {
+    deepseek.deleteApiProfile(profileId);
+    return buildControlState();
+  });
+
+  ipcMain.handle('test-api-config', async (_event, config) => {
+    return deepseek.testApiConfig(config);
+  });
+
   ipcMain.handle('set-rolling-enabled', (_event, enabled) => {
     const rollingEnabled = memory.setRollingEnabled(enabled);
     if (petWindow && !petWindow.isDestroyed()) {
@@ -330,7 +352,10 @@ app.whenReady().then(async () => {
       memorySummary: memory.getMemorySummary(),
       profile: memory.getProfile(),
       memoryItems: memory.getMemoryItems(8),
-      memoryStats: memory.getMemoryStats()
+      memoryStats: memory.getMemoryStats(),
+      apiConfig: deepseek.getPublicApiConfig(),
+      apiProfiles: deepseek.getApiProfiles(),
+      apiPresets: deepseek.getApiPresets()
     };
   });
 

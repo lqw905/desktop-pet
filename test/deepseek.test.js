@@ -3,6 +3,9 @@
  *
  * 测试：buildHeaders、checkStatus、MODEL、API_BASE、PROVIDER_NAME
  */
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 
 // 保存原始环境变量
 const originalEnv = { ...process.env };
@@ -17,6 +20,7 @@ beforeEach(() => {
   delete process.env.OPENROUTER_API_KEY;
   delete process.env.AI_PROVIDER;
   delete process.env.AI_MODEL;
+  delete process.env.DESKTOP_PET_API_CONFIG_PATH;
 
   // 清除模块缓存，让环境变量变化生效
   jest.resetModules();
@@ -198,6 +202,113 @@ describe('callDeepseek', () => {
     const body = JSON.parse(global.fetch.mock.calls[0][1].body);
     expect(body.enable_thinking).toBe(false);
     expect(body.model).toBe('qwen-turbo');
+  });
+});
+
+// ==================== API config persistence ====================
+
+describe('API config persistence', () => {
+  test('保存 API 配置后动态读取新配置', () => {
+    const configPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'pet-api-')), 'api-config.json');
+    process.env.DESKTOP_PET_API_CONFIG_PATH = configPath;
+
+    const { saveApiConfig, getApiConfig, getApiProfiles } = loadModule();
+    saveApiConfig({
+      profileName: 'DeepSeek 主用',
+      provider: 'deepseek',
+      providerName: 'DeepSeek',
+      baseUrl: 'https://api.deepseek.com',
+      model: 'deepseek-chat',
+      apiKey: 'sk-saved-key',
+      streamEnabled: false,
+      enableThinking: false
+    });
+
+    const config = getApiConfig();
+    const profiles = getApiProfiles();
+    expect(profiles).toHaveLength(1);
+    expect(profiles[0].name).toBe('DeepSeek 主用');
+    expect(config.provider).toBe('deepseek');
+    expect(config.baseUrl).toBe('https://api.deepseek.com');
+    expect(config.model).toBe('deepseek-chat');
+    expect(config.apiKey).toBe('sk-saved-key');
+    expect(config.streamEnabled).toBe(false);
+  });
+
+  test('空 API Key 保存时不会把环境变量 Key 写入配置文件', () => {
+    const configPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'pet-api-')), 'api-config.json');
+    process.env.DESKTOP_PET_API_CONFIG_PATH = configPath;
+    process.env.AI_API_KEY = 'sk-env-key';
+
+    const { saveApiConfig, getApiConfig } = loadModule();
+    saveApiConfig({
+      provider: 'aliyun-bailian',
+      baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+      model: 'qwen-plus',
+      apiKey: ''
+    });
+
+    const saved = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    expect(saved.profiles[0].apiKey).toBe('');
+    expect(getApiConfig().apiKey).toBe('sk-env-key');
+  });
+
+  test('可以保存多个配置并切换当前配置', () => {
+    const configPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'pet-api-')), 'api-config.json');
+    process.env.DESKTOP_PET_API_CONFIG_PATH = configPath;
+
+    const { saveApiConfig, getApiConfig, getApiProfiles, setApiProfile } = loadModule();
+    saveApiConfig({
+      createNew: true,
+      profileName: '百炼',
+      provider: 'aliyun-bailian',
+      baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+      model: 'qwen-turbo',
+      apiKey: 'sk-qwen'
+    });
+    saveApiConfig({
+      createNew: true,
+      profileName: 'DeepSeek',
+      provider: 'deepseek',
+      baseUrl: 'https://api.deepseek.com',
+      model: 'deepseek-chat',
+      apiKey: 'sk-deepseek'
+    });
+
+    const profiles = getApiProfiles();
+    expect(profiles.map(profile => profile.name)).toEqual(['百炼', 'DeepSeek']);
+    expect(getApiConfig().model).toBe('deepseek-chat');
+
+    setApiProfile(profiles[0].id);
+    expect(getApiConfig().model).toBe('qwen-turbo');
+  });
+
+  test('删除当前配置后自动切换到剩余配置', () => {
+    const configPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'pet-api-')), 'api-config.json');
+    process.env.DESKTOP_PET_API_CONFIG_PATH = configPath;
+
+    const { saveApiConfig, getApiConfig, getApiProfiles, deleteApiProfile } = loadModule();
+    saveApiConfig({
+      createNew: true,
+      profileName: '百炼',
+      provider: 'aliyun-bailian',
+      baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+      model: 'qwen-turbo',
+      apiKey: 'sk-qwen'
+    });
+    saveApiConfig({
+      createNew: true,
+      profileName: 'DeepSeek',
+      provider: 'deepseek',
+      baseUrl: 'https://api.deepseek.com',
+      model: 'deepseek-chat',
+      apiKey: 'sk-deepseek'
+    });
+
+    const currentProfile = getApiProfiles().find(profile => profile.name === 'DeepSeek');
+    deleteApiProfile(currentProfile.id);
+    expect(getApiProfiles().map(profile => profile.name)).toEqual(['百炼']);
+    expect(getApiConfig().model).toBe('qwen-turbo');
   });
 });
 
