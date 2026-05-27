@@ -52,13 +52,13 @@ describe('initDatabase', () => {
     expect(settings.saveRawMessages).toBe(true);
   });
 
-  test('rollingEnabled 默认为 true，且可以切换', () => {
+  test('rollingEnabled 默认为 false，且可以切换', () => {
     initDatabase();
-    expect(getMemorySettings().rollingEnabled).toBe(true);
-    expect(setRollingEnabled(false)).toBe(false);
     expect(getMemorySettings().rollingEnabled).toBe(false);
     expect(setRollingEnabled(true)).toBe(true);
     expect(getMemorySettings().rollingEnabled).toBe(true);
+    expect(setRollingEnabled(false)).toBe(false);
+    expect(getMemorySettings().rollingEnabled).toBe(false);
   });
 
   test('rollingEnabled 会从本地数据恢复', () => {

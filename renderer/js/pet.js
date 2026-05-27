@@ -358,7 +358,7 @@ function setMood(mood) {
 // --- IPC Listeners ---
 if (window.petAPI) {
   window.petAPI.getState?.().then((state) => {
-    setRollingEnabled(state?.memorySettings?.rollingEnabled !== false);
+    setRollingEnabled(state?.memorySettings?.rollingEnabled === true);
   });
 
   window.petAPI.onShowBubble((text) => {

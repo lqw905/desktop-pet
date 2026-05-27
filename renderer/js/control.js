@@ -170,7 +170,7 @@ function updateMemoryDisplay(state = {}) {
 
 function updateRollingDisplay(state = {}) {
   const settings = state.memorySettings || {};
-  rollingToggle.checked = settings.rollingEnabled !== false;
+  rollingToggle.checked = settings.rollingEnabled === true;
 }
 
 function updateApiDisplay(state = {}) {

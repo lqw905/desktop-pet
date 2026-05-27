@@ -35,7 +35,7 @@ function getDefaultSettings() {
     summaryMaxChars: getEnvInt('SUMMARY_MAX_CHARS', 1200),
     summaryUpdateEvery: getEnvInt('SUMMARY_UPDATE_EVERY', 10),
     allowHighSensitivityMemory: getEnvBool('ALLOW_HIGH_SENSITIVITY_MEMORY', false),
-    rollingEnabled: getEnvBool('ROLLING_ENABLED', true)
+    rollingEnabled: getEnvBool('ROLLING_ENABLED', false)
   };
 }
 

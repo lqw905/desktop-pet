@@ -29,7 +29,7 @@ let mood = null;
 let deepseek = null;
 
 function getRollingEnabled() {
-  return memory?.getMemorySettings?.().rollingEnabled !== false;
+  return memory?.getMemorySettings?.().rollingEnabled === true;
 }
 
 function syncRollingStateToPet() {
