@@ -34,7 +34,17 @@ function getDefaultSettings() {
     memoryContextItems: getEnvInt('MEMORY_CONTEXT_ITEMS', 10),
     summaryMaxChars: getEnvInt('SUMMARY_MAX_CHARS', 1200),
     summaryUpdateEvery: getEnvInt('SUMMARY_UPDATE_EVERY', 10),
-    allowHighSensitivityMemory: getEnvBool('ALLOW_HIGH_SENSITIVITY_MEMORY', false)
+    allowHighSensitivityMemory: getEnvBool('ALLOW_HIGH_SENSITIVITY_MEMORY', false),
+    rollingEnabled: getEnvBool('ROLLING_ENABLED', true)
+  };
+}
+
+function mergePersistedSettings(parsedSettings = {}, defaultSettings = getDefaultSettings()) {
+  return {
+    ...defaultSettings,
+    rollingEnabled: parsedSettings.rollingEnabled === undefined
+      ? defaultSettings.rollingEnabled
+      : parsedSettings.rollingEnabled !== false
   };
 }
 
@@ -92,7 +102,7 @@ function initDatabase() {
         version: 4,
         currentPersonaId: parsed.currentPersonaId || DEFAULT_PERSONA_ID,
         customPersonas: Array.isArray(parsed.customPersonas) ? parsed.customPersonas : [],
-        settings: currentSettings,
+        settings: mergePersistedSettings(parsed.settings, currentSettings),
         profile: {
           ...createDefaultData().profile,
           ...(parsed.profile || {})
@@ -262,6 +272,12 @@ function getRecentChatConversations(limit = 10) {
 
 function getMemorySettings() {
   return { ...data.settings };
+}
+
+function setRollingEnabled(enabled) {
+  data.settings.rollingEnabled = enabled !== false;
+  saveData();
+  return data.settings.rollingEnabled;
 }
 
 function getMemorySummary() {
@@ -600,7 +616,7 @@ module.exports = {
   setMemory, getMemory,
   saveMood, getLastMood, getLastMoodReason,
   cleanOldConversations,
-  getMemorySettings, getMemorySummary, setMemorySummary,
+  getMemorySettings, setRollingEnabled, getMemorySummary, setMemorySummary,
   getProfile, setProfile, mergeProfilePatch,
   shouldReviewMemory, getMessagesForMemoryReview, markMemoryReviewed,
   applyMemoryReview, getMemoryItems, getMemoryContextItems, getMemoryStats,

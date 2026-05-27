@@ -24,12 +24,13 @@ const {
   saveMessage, getRecentConversations, getRecentChatConversations, getTodayMessageCount,
   getLastPetMessageTime, setMemory, getMemory,
   saveMood, getLastMood, getLastMoodReason,
-  getMemorySettings, getMemorySummary, setMemorySummary,
+  getMemorySettings, setRollingEnabled, getMemorySummary, setMemorySummary,
   getProfile, setProfile, mergeProfilePatch,
   shouldReviewMemory, getMessagesForMemoryReview, markMemoryReviewed,
   applyMemoryReview, getMemoryItems, getMemoryContextItems, getMemoryStats,
   cleanOldConversations
 } = require('../electron/memory');
+const fs = require('fs');
 
 // ==================== 基础结构 ====================
 
@@ -49,6 +50,27 @@ describe('initDatabase', () => {
   test('saveRawMessages 默认为 true', () => {
     const settings = getMemorySettings();
     expect(settings.saveRawMessages).toBe(true);
+  });
+
+  test('rollingEnabled 默认为 true，且可以切换', () => {
+    initDatabase();
+    expect(getMemorySettings().rollingEnabled).toBe(true);
+    expect(setRollingEnabled(false)).toBe(false);
+    expect(getMemorySettings().rollingEnabled).toBe(false);
+    expect(setRollingEnabled(true)).toBe(true);
+    expect(getMemorySettings().rollingEnabled).toBe(true);
+  });
+
+  test('rollingEnabled 会从本地数据恢复', () => {
+    fs.existsSync.mockReturnValueOnce(true);
+    fs.readFileSync.mockReturnValueOnce(JSON.stringify({
+      settings: { rollingEnabled: false },
+      conversations: [],
+      moodHistory: []
+    }));
+
+    initDatabase();
+    expect(getMemorySettings().rollingEnabled).toBe(false);
   });
 
   test('getProfile 返回完整画像结构', () => {

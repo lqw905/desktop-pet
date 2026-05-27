@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('petAPI', {
   onShowBubble: (callback) => ipcRenderer.on('show-bubble', (_event, text) => callback(text)),
   onUpdateMood: (callback) => ipcRenderer.on('update-mood', (_event, mood) => callback(mood)),
   onToggleBubble: (callback) => ipcRenderer.on('toggle-bubble', (_event, enabled) => callback(enabled)),
+  onToggleRolling: (callback) => ipcRenderer.on('toggle-rolling', (_event, enabled) => callback(enabled)),
 
   // Chat actions
   sendMessage: (text) => ipcRenderer.send('user-message', text),
@@ -36,6 +37,7 @@ contextBridge.exposeInMainWorld('controlAPI', {
   onChatMessage: (callback) => ipcRenderer.on('chat-message', (_event, data) => callback(data)),
   getState: () => ipcRenderer.invoke('get-state'),
   clearMemory: () => ipcRenderer.invoke('clear-memory'),
+  setRollingEnabled: (enabled) => ipcRenderer.invoke('set-rolling-enabled', enabled),
   setPersona: (personaId) => ipcRenderer.invoke('set-persona', personaId),
   saveCustomPersona: (persona) => ipcRenderer.invoke('save-custom-persona', persona),
   deleteCustomPersona: (personaId) => ipcRenderer.invoke('delete-custom-persona', personaId),

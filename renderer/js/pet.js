@@ -36,6 +36,7 @@ let nextRollTargetAt = 0;
 let isPointerNearPet = false;
 let activeRoll = null;
 let isPickingRoll = false;
+let rollingEnabled = true;
 
 function getMotionBounds() {
   const display = window.screen || {};
@@ -139,6 +140,12 @@ function stopRollAtCurrentPosition() {
   syncRollStyles();
 }
 
+function setRollingEnabled(enabled) {
+  rollingEnabled = enabled !== false;
+  stopRollAtCurrentPosition();
+  nextRollTargetAt = performance.now() + 1200;
+}
+
 function animateLocalRoll(now) {
   if (!lastRollFrameAt) {
     lastRollFrameAt = now;
@@ -148,7 +155,7 @@ function animateLocalRoll(now) {
   lastRollFrameAt = now;
 
   const isBubbleVisible = bubble?.classList.contains('bubble-visible');
-  const shouldPause = isPointerNearPet || isDragging || expressionLocked || isBubbleVisible;
+  const shouldPause = !rollingEnabled || isPointerNearPet || isDragging || expressionLocked || isBubbleVisible;
   if (shouldPause) {
     stopRollAtCurrentPosition();
     nextRollTargetAt = now + 1200;
@@ -344,6 +351,10 @@ function setMood(mood) {
 
 // --- IPC Listeners ---
 if (window.petAPI) {
+  window.petAPI.getState?.().then((state) => {
+    setRollingEnabled(state?.memorySettings?.rollingEnabled !== false);
+  });
+
   window.petAPI.onShowBubble((text) => {
     showBubble(text);
   });
@@ -355,6 +366,10 @@ if (window.petAPI) {
   window.petAPI.onToggleBubble((enabled) => {
     bubbleEnabled = enabled;
     if (!enabled) hideBubble();
+  });
+
+  window.petAPI.onToggleRolling((enabled) => {
+    setRollingEnabled(enabled);
   });
 }
 

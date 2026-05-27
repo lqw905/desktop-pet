@@ -20,6 +20,7 @@ const deletePersonaBtn = document.getElementById('btn-delete-persona');
 const chatHistory = document.getElementById('chat-history');
 const memorySummary = document.getElementById('memory-summary');
 const clearMemoryBtn = document.getElementById('btn-clear-memory');
+const rollingToggle = document.getElementById('rolling-toggle');
 
 const MOOD_MAP = {
   happy:   { emoji: '😊', label: '开心' },
@@ -85,6 +86,7 @@ function applyPersonaState(state = {}) {
   if (state.mood) {
     updateMoodDisplay(state.mood, state.moodReason);
   }
+  updateRollingDisplay(state);
   clearChatHistoryDisplay();
   if (state.recentMessages?.length) {
     state.recentMessages.forEach(m => addChatEntry(m.role, m.content));
@@ -147,6 +149,11 @@ function updateMemoryDisplay(state = {}) {
   memorySummary.textContent = `状态：${enabledText}；原文：${rawText}；长期记忆 ${stats.memoryItems || 0} 条；候选 ${stats.inboxItems || 0} 条；已审查到 #${stats.lastReviewedMessageId || 0}\n摘要：${summary}${itemText}`;
 }
 
+function updateRollingDisplay(state = {}) {
+  const settings = state.memorySettings || {};
+  rollingToggle.checked = settings.rollingEnabled !== false;
+}
+
 function clearChatHistoryDisplay() {
   chatHistory.innerHTML = '<div class="empty-hint">暂无最近对话</div>';
 }
@@ -170,6 +177,7 @@ if (window.controlAPI) {
   window.controlAPI.getState().then(state => {
     updatePersonaDisplay(state);
     if (state.mood) updateMoodDisplay(state.mood, state.moodReason);
+    updateRollingDisplay(state);
     if (state.recentMessages) {
       state.recentMessages.forEach(m => addChatEntry(m.role, m.content));
     }
@@ -261,5 +269,16 @@ clearMemoryBtn.addEventListener('click', async () => {
     applyPersonaState(state);
   } finally {
     clearMemoryBtn.disabled = false;
+  }
+});
+
+rollingToggle.addEventListener('change', async () => {
+  if (!window.controlAPI) return;
+  rollingToggle.disabled = true;
+  try {
+    const state = await window.controlAPI.setRollingEnabled(rollingToggle.checked);
+    if (state) updateRollingDisplay(state);
+  } finally {
+    rollingToggle.disabled = false;
   }
 });

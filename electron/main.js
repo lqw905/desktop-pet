@@ -308,6 +308,14 @@ app.whenReady().then(async () => {
     return buildControlState();
   });
 
+  ipcMain.handle('set-rolling-enabled', (_event, enabled) => {
+    const rollingEnabled = memory.setRollingEnabled(enabled);
+    if (petWindow && !petWindow.isDestroyed()) {
+      petWindow.webContents.send('toggle-rolling', rollingEnabled);
+    }
+    return buildControlState();
+  });
+
   ipcMain.handle('clear-memory', () => {
     memory.clearMemory();
     mood.initMood();
